@@ -5,6 +5,7 @@ import com.spacesoldier.reactive.experiment.arch.api.intlayer.routing.model.Rout
 import lombok.Builder;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
+import reactor.util.function.Tuple2;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -64,27 +65,65 @@ public class IntlayerObjectRouter {
 
     private void buildRoutingTable(){
         routingUnits.entrySet().stream()
-                .map(
-                        entry -> {
-                            List<RoutingUnit> units = entry.getValue();
+                                .map(
+                                        entry -> {
+                                            List<RoutingUnit> units = entry.getValue();
 
-                            List<String> uNames = units.stream().map(
-                                    unit -> unit.getName()
-                            ).collect(Collectors.toList());
+                                            List<String> uNames = units.stream().map(
+                                                    unit -> unit.getName()
+                                            ).collect(Collectors.toList());
 
-                            routingTable.put(entry.getKey(), uNames);
+                                            routingTable.put(entry.getKey(), uNames);
 
-                            return uNames;
-                        }
-                    )
-                .collect(Collectors.toList());
+                                            return uNames;
+                                        }
+                                    )
+                                .toList();
         log.info("[ROUTER]: routing table built");
     }
 
-    private Consumer routeObjectSink(){
+    private Consumer<RoutedObjectEnvelope> routeObjectSink(){
 
         return envelope -> {
-            log.info("beep");
+            Class routingType = envelope.getPayload().getClass();
+
+            List<Consumer> sinks = new ArrayList<>();
+
+            List<String> receivers = null;
+
+            if (routingTable.containsKey(routingType)){
+                receivers = routingTable.get(routingType);
+                sinks.addAll(
+                        receivers.stream()
+                                 .map(
+                                        receiverName -> {
+                                            Consumer sinkToRoute = sinkByChannelNameProvider.apply(receiverName);
+                                            return sinkToRoute;
+                                        }
+                                 )
+                                 .filter(sink -> sink != null)
+                                 .toList()
+                    );
+                log.info("route");
+            }
+
+
+            if (sinks.size() == 0){
+                // we did not find any receiver for the object among channel names,
+                // so we return the object to the adapter which sent it here
+                // finding a sink by envelope's request id
+                Consumer sinkById = sinkByRqIdProvider.apply(envelope.getRqId());
+                if (sinkById != null){
+                    // we unwrap the envelope because the receiver
+                    // definitely knows the request id
+                    sinkById.accept(envelope.getPayload());
+                }
+            } else {
+                // and finally we throw our envelope to all receivers found
+                sinks.forEach(
+                        sink -> sink.accept(envelope)
+                );
+            }
         };
     }
     private void buildStreams(){

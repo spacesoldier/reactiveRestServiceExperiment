@@ -53,4 +53,12 @@ public class FluxChannelProvider {
         return streamOnDemand(streamName).getStreamToSubscribe();
     }
 
+    public Consumer getExistingSink(String channelName){
+        Consumer sink = null;
+        if (requestStreams.containsKey(channelName)){
+            sink = requestStreams.get(channelName).getStreamInput();
+        }
+
+        return sink;
+    }
 }

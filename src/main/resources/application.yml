@@ -1,0 +1,4 @@
+spring:
+  jackson:
+    serialization:
+      fail-on-empty-beans: false    # in this example project we build an empty DTO with no fields

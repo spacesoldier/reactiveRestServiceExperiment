@@ -62,16 +62,16 @@ public class EndpointAdapter {
         this.asyncErrorSink = errorSink;
     }
 
-    private Function wrapRequestEnvelope(ServerRequest req){
+    private Function<Object, RestRequestEnvelope> wrapRequestEnvelope(ServerRequest req){
 
         return reqBody -> {
             RestRequestEnvelope env =
-            RestRequestEnvelope.builder()
-                    .requestId(req.exchange().getLogPrefix())
-                    .pathVariables(req.pathVariables())
-                    .queryParams(req.queryParams())
-                    .payload(reqBody)
-                    .build();
+                                        RestRequestEnvelope.builder()
+                                                    .requestId(req.exchange().getLogPrefix())
+                                                    .pathVariables(req.pathVariables())
+                                                    .queryParams(req.queryParams())
+                                                    .payload(reqBody)
+                                                .build();
 
             return env;
         };
@@ -136,7 +136,8 @@ public class EndpointAdapter {
                     .subscribe  (   dropRequestToIntlayer   (reqId)              );
         } else {
             // when the request does not have a body things get simpler
-            Object requestToProcess = wrapRequestEnvelope(req).apply(null);
+            RestRequestEnvelope requestEnvelope = wrapRequestEnvelope(req).apply(null);
+            Object requestToProcess = prepareRequestInput(typeToForward).apply(requestEnvelope);
             dropRequestToIntlayer(reqId).accept(requestToProcess);
         }
     }
@@ -178,32 +179,36 @@ public class EndpointAdapter {
         };
     }
 
-    private Function<Object, RestResponseEnvelope> prepareResponseEnvelope(){
+    private Function<Object, RestResponseEnvelope> prepareResponseEnvelope(
+            Class typeToExpectFromLogic
+    ){
 
         return response -> {
-
+            Class responseType = response.getClass();
             RestResponseEnvelope output = null;
 
-            if (response.getClass() == RestResponseEnvelope.class){
+            if (responseType == RestResponseEnvelope.class){
                 // bypass the response which came in ready state
                 output = (RestResponseEnvelope) response;
             } else {
-                if (responseProcessors.containsKey(response.getClass())){
-                    // we apply some transformation to the response object
-                    // obtained from the integration layer
+                // let's check if we received the expected stuff from internal logic
+                if (responseType == typeToExpectFromLogic){
+                    Object responsePayload = response;
+                    // good, all systems go
+                    if (responseProcessors.containsKey(responseType)){
+                        responsePayload = responseProcessors.get(responseType).apply(response);
+                    }
+
                     output = RestResponseEnvelope.builder()
-                            .status(OperationStatus.OK)
-                            .data(
-                                    responseProcessors.get(response.getClass())
-                                                        .apply(response)
-                            )
-                            .build();
+                                                    .status(OperationStatus.OK)
+                                                    .data(responsePayload)
+                                                .build();
                 } else {
-                    // by default, we just wrap the response into common message format
+                    // unexpected results from logic, let's report something went wrong
                     output = RestResponseEnvelope.builder()
-                                .status(OperationStatus.OK)
-                                .data(response)
-                            .build();
+                                                        .status(OperationStatus.PROBLEMS)
+                                                        .data(response)
+                                                    .build();
                 }
             }
 
@@ -249,9 +254,15 @@ public class EndpointAdapter {
      */
     public Mono<ServerResponse> forwardRequestToLogic(
             Class requestBodyType,
-            ServerRequest request
+            ServerRequest request,
+            Class typeToExpectFromLogic
     ){
-        return forwardRequestToLogic(requestBodyType,requestBodyType,request);
+        return forwardRequestToLogic(
+                                        requestBodyType,
+                                        requestBodyType,
+                                        request,
+                                        typeToExpectFromLogic
+                                    );
     }
 
     /**
@@ -265,7 +276,8 @@ public class EndpointAdapter {
     public Mono<ServerResponse> forwardRequestToLogic(
             Class restRequestBodyType,
             Class typeToForwardToLogic,
-            ServerRequest request
+            ServerRequest request,
+            Class typeToExpectFromLogic
     ){
 
         Mono<ServerResponse> output = null;
@@ -274,9 +286,9 @@ public class EndpointAdapter {
 
         if (singleRequestsReceiver != null){
                 Mono responsePublisher =
-                        singleRequestsReceiver.apply    (   requestId                           )
-                                                .map    (   prepareResponseEnvelope()           )
-                                                .map    (   switchResponseStatusCode(request)   );
+                        singleRequestsReceiver.apply    (   requestId                                           )
+                                                .map    (   prepareResponseEnvelope     (typeToExpectFromLogic) )
+                                                .map    (   switchResponseStatusCode    (request)               );
 
 
                 output = status(200).body(responsePublisher, RestResponseEnvelope.class);

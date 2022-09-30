@@ -22,7 +22,7 @@ public class RouterConfig {
 
         return IntlayerObjectRouter.builder()
                     .sinkByRqIdProvider(requestId -> monoChannelProvider.getInput(requestId))
-                    .sinkByChannelNameProvider(channelName -> fluxChannelProvider.getSink(channelName))
+                    .sinkByChannelNameProvider(channelName -> fluxChannelProvider.getExistingSink(channelName))
                     .fluxProvider(channelName -> fluxChannelProvider.getStream(channelName))
                 .build();
     }
