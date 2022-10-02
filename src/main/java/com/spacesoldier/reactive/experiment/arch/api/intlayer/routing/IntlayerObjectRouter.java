@@ -5,13 +5,10 @@ import com.spacesoldier.reactive.experiment.arch.api.intlayer.routing.model.Rout
 import lombok.Builder;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
-import reactor.util.function.Tuple2;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -27,15 +24,39 @@ public class IntlayerObjectRouter {
 
     private Function<String,Consumer> sinkByChannelNameProvider;
 
+    private BiFunction<Class,Function,Function> functionDecorator;
+
+    private Function<RoutedObjectEnvelope,RoutedObjectEnvelope> defaultFunctionDecorator(
+            Function fnToDecorate
+    ){
+
+        return envelope -> {
+            Object result = null;
+
+            try {
+                result = fnToDecorate.apply(envelope.getPayload());
+            } catch (Exception e){
+                result = e;
+            }
+
+            return RoutedObjectEnvelope.builder()
+                    .rqId(envelope.getRqId())
+                    .payload(result)
+                    .build();
+        };
+    }
+
     @Builder
     private IntlayerObjectRouter(
             Function<String,Flux> fluxProvider,
             Function<String,Consumer> sinkByRqIdProvider,
-            Function<String,Consumer> sinkByChannelNameProvider
+            Function<String,Consumer> sinkByChannelNameProvider,
+            BiFunction<Class, Function, Function> functionDecorator
     ){
         this.fluxProvider = fluxProvider;
         this.sinkByRqIdProvider = sinkByRqIdProvider;
         this.sinkByChannelNameProvider = sinkByChannelNameProvider;
+        this.functionDecorator = functionDecorator;
     }
 
     private String routerInitLogMsgTemplate = "[ROUTER]: add routable unit %s";
@@ -58,6 +79,7 @@ public class IntlayerObjectRouter {
         routeRecord.add(
                             RoutingUnit.builder()
                                             .name(routableUnitName)
+                                            .inputType(typeToRoute)
                                             .call(routeToFn)
                                         .build()
                         );
@@ -126,12 +148,60 @@ public class IntlayerObjectRouter {
             }
         };
     }
-    private void buildStreams(){
 
+    List<Flux> allStreams;
+
+    private void buildStreams(){
+        allStreams = routingUnits.entrySet()
+                        .stream()
+                        .flatMap(
+                              entry -> {
+                                  List<Flux> streams =
+                                          entry.getValue()
+                                                .stream()
+                                                .map(
+                                                   unit -> {
+                                                       Function logicFn = functionDecorator != null         ?
+                                                                            functionDecorator.apply(
+                                                                                    unit.getInputType(),
+                                                                                    unit.getCall()
+                                                                            )                               :
+                                                                            defaultFunctionDecorator(
+                                                                                    unit.getCall()
+                                                                            );
+
+                                                       Flux stream = null;
+
+                                                       if (fluxProvider != null){
+                                                           stream = fluxProvider.apply(unit.getName());
+                                                           stream = stream.map(logicFn);
+                                                       }
+
+                                                       return stream;
+                                                   }
+                                                )
+                                                .filter(stream -> stream != null)
+                                                .toList();
+                                  return streams.stream();
+                              }
+                        )
+                        .toList();
+    }
+
+    public void subscribeToAllStreams(){
+        allStreams.stream()
+                .map(
+                        stream -> stream.subscribe(
+                                routeObjectSink()
+                        )
+                )
+                .toList();
     }
 
     public void start(){
         buildRoutingTable();
+        buildStreams();
+        subscribeToAllStreams();
     }
 
     public BiConsumer<String, Object> singleRequestsInput(){
