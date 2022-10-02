@@ -3,6 +3,8 @@ package com.spacesoldier.reactive.experiment.arch.api;
 import com.spacesoldier.reactive.experiment.arch.api.features.feature0.model.FeatureOneRequest;
 import com.spacesoldier.reactive.experiment.arch.api.features.feature0.model.FeatureOneResponse;
 import com.spacesoldier.reactive.experiment.arch.api.features.feature1.model.FeatureTwoRequest;
+import com.spacesoldier.reactive.experiment.arch.api.features.feature2.model.ThirdFeatureServiceRequest;
+import com.spacesoldier.reactive.experiment.arch.api.features.feature2.model.ThirdFeatureServiceResponse;
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters.rest.EndpointAdapter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
@@ -39,6 +41,16 @@ public class ServiceConfig {
                                                                                 req,
                                                                                 FeatureOneResponse.class
                                                                               )
+                        )
+                ).
+                and(
+                        route(
+                                GET("/api/feature2/{shnooops}"),
+                                req -> endpointAdapter.forwardRequestToLogic(
+                                                                                ThirdFeatureServiceRequest.class,
+                                                                                req,
+                                                                                ThirdFeatureServiceResponse.class
+                                                                            )
                         )
                 );
     }
