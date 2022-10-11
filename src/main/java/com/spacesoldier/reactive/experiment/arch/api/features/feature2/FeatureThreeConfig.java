@@ -1,6 +1,5 @@
 package com.spacesoldier.reactive.experiment.arch.api.features.feature2;
 
-import com.spacesoldier.reactive.experiment.arch.api.features.feature0.model.FeatureOneRequest;
 import com.spacesoldier.reactive.experiment.arch.api.features.feature2.model.ThirdFeatureServiceRequest;
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters.WiringAdapter;
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters.rest.EndpointAdapter;
