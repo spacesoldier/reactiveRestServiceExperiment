@@ -2,7 +2,7 @@ package com.spacesoldier.reactive.experiment.arch.api.features.feature1;
 
 import com.spacesoldier.reactive.experiment.arch.api.features.feature1.model.FeatureTwoRequest;
 import com.spacesoldier.reactive.experiment.arch.api.features.feature1.model.FeatureTwoResponse;
-import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters.rest.model.RestRequestEnvelope;
+import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters.rest.incoming.model.RestRequestEnvelope;
 
 import java.util.function.Function;
 

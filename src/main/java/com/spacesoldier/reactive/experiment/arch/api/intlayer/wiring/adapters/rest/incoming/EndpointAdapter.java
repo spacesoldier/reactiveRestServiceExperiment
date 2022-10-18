@@ -1,6 +1,6 @@
-package com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters.rest;
+package com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters.rest.incoming;
 
-import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters.rest.model.*;
+import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters.rest.incoming.model.*;
 import lombok.Builder;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
