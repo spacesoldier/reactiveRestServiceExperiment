@@ -26,33 +26,4 @@ public class ApiCallSpec<T> {
     String[] authNames;
     ParameterizedTypeReference<T> returnType;
 
-//    @Builder
-//    private ApiCallSpec (
-//                String path,
-//                HttpMethod method,
-//                Map<String, Object> pathParams,
-//                MultiValueMap<String, String> queryParams,
-//                Object body,
-//                HttpHeaders headerParams,
-//                MultiValueMap<String, String> cookieParams,
-//                MultiValueMap<String, Object> formParams,
-//                List<MediaType> accept,
-//                MediaType contentType,
-//                String[] authNames,
-//                ParameterizedTypeReference<T> returnType
-//            ){
-//                this.path = path;
-//                this.method = method;
-//                this.pathParams = pathParams;
-//                this.queryParams = queryParams;
-//                this.body = body;
-//                this.headerParams = headerParams;
-//                this.cookieParams = cookieParams;
-//                this.formParams = formParams;
-//                this.accept = accept;
-//                this.contentType = contentType;
-//                this.authNames = authNames;
-//                this.returnType = returnType;
-//            }
-
 }
