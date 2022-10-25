@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.Map;
 
 @Data @Builder
-public class ApiCallSpec<T> {
+public class ApiCallSpec{
     String path;
     HttpMethod method;
     Map<String, Object> pathParams;
@@ -24,6 +24,4 @@ public class ApiCallSpec<T> {
     List<MediaType> accept;
     MediaType contentType;
     String[] authNames;
-    ParameterizedTypeReference<T> returnType;
-
 }

@@ -3,6 +3,8 @@ package com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters.r
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters.rest.outgoing.model.ApiCallSpec;
+import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters.rest.outgoing.model.adapter.ErrorStatusHandlerDefinition;
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters.rest.outgoing.model.adapter.ResourceCallDescriptor;
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters.rest.outgoing.model.auth.ApiKeyAuth;
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters.rest.outgoing.model.auth.Authentication;
@@ -11,6 +13,7 @@ import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters.re
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters.rest.outgoing.model.client.CollectionFormat;
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters.rest.outgoing.model.client.JavaTimeFormatter;
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters.rest.outgoing.model.client.RFC3339DateFormat;
+import lombok.Builder;
 import org.openapitools.jackson.nullable.JsonNullableModule;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.*;
@@ -38,9 +41,8 @@ import java.text.ParseException;
 import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.Map.Entry;
-import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.function.Function;
-import java.util.function.Predicate;
 
 public class ApiClientImpl extends JavaTimeFormatter {
 
@@ -57,6 +59,7 @@ public class ApiClientImpl extends JavaTimeFormatter {
     private Map<String, Authentication> authentications;
 
 
+    @Builder
     public ApiClientImpl(String basePath) {
         this.basePath = basePath;
         this.dateFormat = createDefaultDateFormat();
@@ -538,26 +541,42 @@ public class ApiClientImpl extends JavaTimeFormatter {
                 >
             > onStatusHandlers = new HashMap<>();
 
-    private BiConsumer<ResourceCallDescriptor, HttpStatus> addResultHandler(Function<String, ? extends Throwable> errorHandler){
+    private void addErrorHandler(
+            String path,
+            HttpMethod method,
+            HttpStatus errorStatus,
+            Function<String, ? extends Throwable> errorHandler
+    ){
 
-        return (descriptor, status) -> {
-            if (!onStatusHandlers.containsKey(descriptor)){
+        ResourceCallDescriptor descriptor = ResourceCallDescriptor.builder()
+                                                                        .path(path)
+                                                                        .method(method)
+                                                                    .build();
+
+        if (!onStatusHandlers.containsKey(descriptor)){
                 onStatusHandlers.put(descriptor, new HashMap<>());
-            }
+        }
 
-            onStatusHandlers.get(descriptor).put(
-                        status,
+        onStatusHandlers.get(descriptor).put(
+                        errorStatus,
                         clientResponse -> clientResponse
                                                 .bodyToMono(String.class)
                                                 .map(   rsBodyStr -> errorHandler.apply(rsBodyStr)  )
                     );
-        };
+    }
+
+    public Consumer<ErrorStatusHandlerDefinition> errorHandlerSink(){
+        return handlerDefiniton -> addErrorHandler(
+                                            handlerDefiniton.getPath(),
+                                            handlerDefiniton.getMethod(),
+                                            handlerDefiniton.getErrorStatus(),
+                                            handlerDefiniton.getErrorHandler()
+                                    );
     }
 
     /**
      * Invoke API by sending HTTP request with the given options.
      *
-     * @param <T> the return type to use
      * @param path The sub-path of the HTTP URL
      * @param method The request method
      * @param pathParams The path parameters
@@ -568,10 +587,9 @@ public class ApiClientImpl extends JavaTimeFormatter {
      * @param accept The request's Accept header
      * @param contentType The request's Content-Type header
      * @param authNames The authentications to apply
-     * @param returnType The return type into which to deserialize the response
      * @return The response body in chosen type
      */
-    public <T> ResponseSpec invokeAPI(
+    public ResponseSpec invokeAPI(
             String path,
             HttpMethod method,
             Map<String, Object> pathParams,
@@ -582,8 +600,7 @@ public class ApiClientImpl extends JavaTimeFormatter {
             MultiValueMap<String, Object> formParams,
             List<MediaType> accept,
             MediaType contentType,
-            String[] authNames,
-            ParameterizedTypeReference<T> returnType
+            String[] authNames
     ) throws RestClientException {
         final WebClient.RequestBodySpec requestBuilder = prepareRequest(
                                                                             path,
@@ -622,6 +639,22 @@ public class ApiClientImpl extends JavaTimeFormatter {
             }
         }
         return output;
+    }
+
+    public Function<ApiCallSpec, ResponseSpec> invokeAPIfnWrapper(){
+        return apiCallSpec -> invokeAPI(
+                                            apiCallSpec.getPath(),
+                                            apiCallSpec.getMethod(),
+                                            apiCallSpec.getPathParams(),
+                                            apiCallSpec.getQueryParams(),
+                                            apiCallSpec.getBody(),
+                                            apiCallSpec.getHeaderParams(),
+                                            apiCallSpec.getCookieParams(),
+                                            apiCallSpec.getFormParams(),
+                                            apiCallSpec.getAccept(),
+                                            apiCallSpec.getContentType(),
+                                            apiCallSpec.getAuthNames()
+                                        );
     }
 
     /**

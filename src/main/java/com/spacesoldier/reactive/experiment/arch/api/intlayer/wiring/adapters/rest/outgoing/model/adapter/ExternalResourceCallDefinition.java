@@ -25,7 +25,7 @@ public class ExternalResourceCallDefinition<T> {
     private Function<T, CorePublisher> resourceInvocationCall;
 
     @Getter
-    private Map<HttpStatus, Function> failStatusHandlers;
+    private Map<HttpStatus, Function<String, Throwable>> failStatusHandlers;
 //    @Getter
 //    private Function responseBodyHandler;
 

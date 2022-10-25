@@ -1,3 +1,6 @@
+external-resources:
+  google:
+    base-url: https://google.com
 
 springdoc:
   swagger-ui:
