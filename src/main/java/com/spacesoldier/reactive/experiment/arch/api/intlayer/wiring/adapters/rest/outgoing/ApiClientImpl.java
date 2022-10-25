@@ -3,6 +3,7 @@ package com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters.r
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters.rest.outgoing.model.adapter.ResourceCallDescriptor;
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters.rest.outgoing.model.auth.ApiKeyAuth;
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters.rest.outgoing.model.auth.Authentication;
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters.rest.outgoing.model.auth.HttpBasicAuth;
@@ -37,6 +38,7 @@ import java.text.ParseException;
 import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.Map.Entry;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 
@@ -524,19 +526,33 @@ public class ApiClientImpl extends JavaTimeFormatter {
         }
     }
 
+
     private Map<
-                    String,
-                    Map<
-                            HttpMethod,
-                            Map<
-                                    Predicate<HttpStatus>,
-                                    Function<ClientResponse, Mono<? extends Throwable>>
-                            >
-                    >
-            > callHandlers = new HashMap<>();
+                ResourceCallDescriptor,
+                Map<
+                        HttpStatus,
+                        Function<
+                                    ClientResponse,
+                                    Mono<? extends Throwable>
+                                >
+                >
+            > onStatusHandlers = new HashMap<>();
 
+    private BiConsumer<ResourceCallDescriptor, HttpStatus> addResultHandler(Function<String, ? extends Throwable> errorHandler){
 
-    private Map<Predicate<HttpStatus>, Function<ClientResponse, Mono<? extends Throwable>>> onStatusHandlers = new HashMap<>();
+        return (descriptor, status) -> {
+            if (!onStatusHandlers.containsKey(descriptor)){
+                onStatusHandlers.put(descriptor, new HashMap<>());
+            }
+
+            onStatusHandlers.get(descriptor).put(
+                        status,
+                        clientResponse -> clientResponse
+                                                .bodyToMono(String.class)
+                                                .map(   rsBodyStr -> errorHandler.apply(rsBodyStr)  )
+                    );
+        };
+    }
 
     /**
      * Invoke API by sending HTTP request with the given options.
@@ -555,9 +571,57 @@ public class ApiClientImpl extends JavaTimeFormatter {
      * @param returnType The return type into which to deserialize the response
      * @return The response body in chosen type
      */
-    public <T> ResponseSpec invokeAPI(String path, HttpMethod method, Map<String, Object> pathParams, MultiValueMap<String, String> queryParams, Object body, HttpHeaders headerParams, MultiValueMap<String, String> cookieParams, MultiValueMap<String, Object> formParams, List<MediaType> accept, MediaType contentType, String[] authNames, ParameterizedTypeReference<T> returnType) throws RestClientException {
-        final WebClient.RequestBodySpec requestBuilder = prepareRequest(path, method, pathParams, queryParams, body, headerParams, cookieParams, formParams, accept, contentType, authNames);
-        return requestBuilder.retrieve();
+    public <T> ResponseSpec invokeAPI(
+            String path,
+            HttpMethod method,
+            Map<String, Object> pathParams,
+            MultiValueMap<String, String> queryParams,
+            Object body,
+            HttpHeaders headerParams,
+            MultiValueMap<String, String> cookieParams,
+            MultiValueMap<String, Object> formParams,
+            List<MediaType> accept,
+            MediaType contentType,
+            String[] authNames,
+            ParameterizedTypeReference<T> returnType
+    ) throws RestClientException {
+        final WebClient.RequestBodySpec requestBuilder = prepareRequest(
+                                                                            path,
+                                                                            method,
+                                                                            pathParams,
+                                                                            queryParams,
+                                                                            body,
+                                                                            headerParams,
+                                                                            cookieParams,
+                                                                            formParams,
+                                                                            accept,
+                                                                            contentType,
+                                                                            authNames
+                                                                                            );
+
+        ResponseSpec output = requestBuilder.retrieve();
+
+        ResourceCallDescriptor apiInvokeDesc = ResourceCallDescriptor.builder()
+                                                                            .path(path)
+                                                                            .method(method)
+                                                                        .build();
+
+        if (onStatusHandlers.containsKey(apiInvokeDesc)){
+
+            final List<Entry<HttpStatus, Function<ClientResponse,Mono<? extends Throwable>>>> handlers =
+                    onStatusHandlers.get(apiInvokeDesc)
+                                        .entrySet()
+                                        .stream()
+                                        .toList();
+
+            for (Entry<HttpStatus, Function<ClientResponse, Mono<? extends Throwable>>> handlerEntry : handlers) {
+                output = output.onStatus(
+                        status -> status == handlerEntry.getKey(),
+                        handlerEntry.getValue()
+                );
+            }
+        }
+        return output;
     }
 
     /**

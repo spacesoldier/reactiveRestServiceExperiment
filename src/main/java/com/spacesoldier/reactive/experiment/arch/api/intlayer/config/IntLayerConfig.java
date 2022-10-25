@@ -29,7 +29,12 @@ public class IntLayerConfig {
     @Bean
     public ApiClientAdapter initApiClientAdapter(){
         return ApiClientAdapter.builder()
-
-                .build();
+                                    .intlayerInputSink(
+                                        (rqId, payload) -> wiringAdapter.receiveSingleRequest(rqId,payload)
+                                    )
+                                    .routableFunctionSink(
+                                        (rqType, handler) -> wiringAdapter.registerFeature(rqType,handler)
+                                    )
+                                .build();
     }
 }

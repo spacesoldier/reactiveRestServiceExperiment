@@ -34,7 +34,7 @@ public class EndpointAdapter {
 
     private BiConsumer<String, Object> asyncErrorSink;
 
-    private String redefineIOBindingWarning = "[WARN]: binding for %s already esxists - the %s, will replace it with %s";
+    private String redefineIOBindingWarning = "[WARN]: binding for %s already exists - the %s, will replace it with %s";
 
     public void registerRequestBuilder(
             Class extractType,
