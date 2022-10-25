@@ -5,9 +5,12 @@ import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters.Wi
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters.rest.outgoing.ApiClient;
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters.rest.outgoing.ApiClientAdapter;
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters.rest.outgoing.ApiClientImpl;
+import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters.rest.outgoing.model.adapter.ExternalResourceCallDefinition;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.stereotype.Component;
+
+import java.util.List;
 
 @Component
 public class IntLayerConfig {
@@ -31,14 +34,25 @@ public class IntLayerConfig {
     @Autowired
     private ApiClientImpl apiClientImplementation;
 
+    @Autowired
+    private List<ExternalResourceCallDefinition> externalResourceCallDefs;
+
     @Bean
     public ApiClientAdapter initApiClientAdapter(){
-        return ApiClientAdapter.builder()
-                                    .errorHandlerSink(  apiClientImplementation.errorHandlerSink()  )
-                                    .routableFunctionSink(
-                                        (rqType, handler) -> wiringAdapter.registerFeature(rqType,handler)
-                                    )
-                                .build();
+        ApiClientAdapter adapter = ApiClientAdapter.builder()
+                                        .errorHandlerSink(  apiClientImplementation.errorHandlerSink()  )
+                                        .routableFunctionSink(
+                                            (rqType, handler) -> wiringAdapter.registerFeature(rqType,handler)
+                                        )
+                                    .build();
+
+        if (externalResourceCallDefs != null && !externalResourceCallDefs.isEmpty()){
+            externalResourceCallDefs.forEach(
+                    extCallDef -> adapter.registerResourceClient(extCallDef)
+            );
+        }
+
+        return adapter;
     }
 
     @Bean

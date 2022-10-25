@@ -26,8 +26,6 @@ public class ExternalResourceCallDefinition<T> {
 
     @Getter
     private Map<HttpStatus, Function<String, Throwable>> failStatusHandlers;
-//    @Getter
-//    private Function responseBodyHandler;
 
     @Builder
     private ExternalResourceCallDefinition(
@@ -43,19 +41,18 @@ public class ExternalResourceCallDefinition<T> {
         this.outgoingMsgType = outgoingMsgType;
         this.resourceInvocationCall = resourceInvocationCall;
 
-//        if (statusHandlers.containsKey(HttpStatus.OK)){
-//            responseBodyHandler = statusHandlers.get(HttpStatus.OK);
-//        }
-
         this.failStatusHandlers = new HashMap<>();
 
-        errorHandlers.entrySet().stream()
-                .filter(entry -> entry.getKey() != HttpStatus.OK)
-                .toList().forEach(
-                        entry -> this.failStatusHandlers.put(
-                                                                entry.getKey(),
-                                                                entry.getValue()
-                                                            )
-                );
+        if (errorHandlers != null && !errorHandlers.isEmpty()){
+            errorHandlers.entrySet().stream()
+                    .filter(entry -> entry.getKey() != HttpStatus.OK)
+                    .toList().forEach(
+                            entry -> this.failStatusHandlers.put(
+                                    entry.getKey(),
+                                    entry.getValue()
+                            )
+                    );
+        }
+
     }
 }

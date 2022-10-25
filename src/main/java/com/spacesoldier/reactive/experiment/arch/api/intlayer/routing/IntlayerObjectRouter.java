@@ -72,9 +72,10 @@ public class IntlayerObjectRouter {
         List<RoutingUnit> routeRecord = routingUnits.get(typeToRoute);
 
         String routableUnitNameTemplate = "%sProcessor-%s";
+        String routeTypeName = typeToRoute != null? typeToRoute.getSimpleName() : "object";
         String routableUnitName = String.format(
                 routableUnitNameTemplate,
-                typeToRoute.getSimpleName(),
+                routeTypeName,
                 routeRecord.size()
         );
 
