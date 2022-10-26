@@ -109,63 +109,67 @@ public class IntlayerObjectRouter {
         log.info("[ROUTER]: routing table built");
     }
 
-    Map<Class, BiConsumer<String, CorePublisher>> dealWithPublishers = new HashMap<>(){{
-
-        put(
-                Mono.class,
-                (rqId, pubObj) -> {
-                    Mono publisher = (Mono) pubObj;
-                    publisher
-                            .publishOn(Schedulers.newParallel("route mono outs"))
-                            .map(
-                                    payload -> RoutedObjectEnvelope.builder()
-                                            .rqId(rqId)
-                                            .payload(payload)
-                                            .build()
-                            ).subscribe(
-                                    routeObjectSink(),
-                                    error -> routeObjectSink().accept(
-                                            RoutedObjectEnvelope.builder()
-                                                    .rqId(rqId)
-                                                    .payload(error)
-                                                    .build()
-                                    )
-                            );
-                }
-        );
-
-        put(
-                Flux.class,
-                (rqId, pubObj) -> {
-                    Flux publisher = (Flux) pubObj;
-                    publisher
-                            .publishOn(Schedulers.newParallel("route flux outs"))
-                            .map(
-                                    payload -> RoutedObjectEnvelope.builder()
-                                            .rqId(rqId)
-                                            .correlId(rqId)
-                                            .payload(payload)
-                                            .build()
-                            ).subscribe(
-                                    routeObjectSink(),
-                                    // when errors happen we won't lose them and route according to the plan
-                                    // until client outside receives a report
-                                    error -> routeObjectSink().accept(
-                                            RoutedObjectEnvelope.builder()
-                                                    .rqId(rqId)
-                                                    .payload(error)
-                                                    .build()
-                                    )
-                            );
-                }
-        );
-
-    }};
-
     private void handlePublisherOutputs(String rqId, CorePublisher publisher){
-        if (dealWithPublishers.containsKey(publisher.getClass())){
-            dealWithPublishers.get(publisher.getClass()).accept(rqId, publisher);
+
+        Flux fluxPub = null;
+        Mono monoPub = null;
+
+        try {
+            fluxPub = (Flux) publisher;
+        } catch (Exception e){
+            log.info("[ROUTER]: payload is not a flux");
         }
+
+        if (fluxPub == null ){
+            try {
+                monoPub = (Mono) publisher;
+            } catch (Exception e){
+                log.info("[ROUTER]: payload is not a mono");
+            }
+        }
+
+        // very dumb part, sorry
+        if (fluxPub != null){
+            fluxPub
+                    .publishOn(Schedulers.newParallel("route flux outs"))
+                    .map(
+                            payload -> RoutedObjectEnvelope.builder()
+                                    .rqId(rqId)
+                                    .correlId(rqId)
+                                    .payload(payload)
+                                    .build()
+                    ).subscribe(
+                            routeObjectSink(),
+                            // when errors happen we won't lose them and route according to the plan
+                            // until client outside receives a report
+                            error -> routeObjectSink().accept(
+                                    RoutedObjectEnvelope.builder()
+                                            .rqId(rqId)
+                                            .payload(error)
+                                            .build()
+                            )
+                    );
+        } else {
+            if (monoPub != null){
+                monoPub
+                        .publishOn(Schedulers.newParallel("route mono outs"))
+                        .map(
+                                payload -> RoutedObjectEnvelope.builder()
+                                        .rqId(rqId)
+                                        .payload(payload)
+                                        .build()
+                        ).subscribe(
+                                routeObjectSink(),
+                                error -> routeObjectSink().accept(
+                                        RoutedObjectEnvelope.builder()
+                                                .rqId(rqId)
+                                                .payload(error)
+                                                .build()
+                                )
+                        );
+            }
+        }
+
     }
 
     private Consumer<RoutedObjectEnvelope> routeObjectSink(){
