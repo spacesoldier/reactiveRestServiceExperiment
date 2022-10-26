@@ -32,7 +32,7 @@ public class ExternalResourceCallDefinition<T,R> {
             HttpMethod method,
             Class outgoingMsgType,
             Function<T, ? extends CorePublisher<R>> resourceInvocationCall,
-            Map<HttpStatus, Function> errorHandlers
+            Map<HttpStatus, Function<String, Throwable>> errorHandlers
     ){
         this.path = path;
         this.method = method;
