@@ -119,10 +119,18 @@ public class IntlayerObjectRouter {
                             .publishOn(Schedulers.newParallel("route mono outs"))
                             .map(
                                     payload -> RoutedObjectEnvelope.builder()
-                                                                .rqId(rqId)
-                                                                .payload(payload)
-                                                            .build()
-                            ).subscribe(    routeObjectSink()   );
+                                            .rqId(rqId)
+                                            .payload(payload)
+                                            .build()
+                            ).subscribe(
+                                    routeObjectSink(),
+                                    error -> routeObjectSink().accept(
+                                            RoutedObjectEnvelope.builder()
+                                                    .rqId(rqId)
+                                                    .payload(error)
+                                                    .build()
+                                    )
+                            );
                 }
         );
 
@@ -131,23 +139,24 @@ public class IntlayerObjectRouter {
                 (rqId, pubObj) -> {
                     Flux publisher = (Flux) pubObj;
                     publisher
-                            .count()
                             .publishOn(Schedulers.newParallel("route flux outs"))
                             .map(
                                     payload -> RoutedObjectEnvelope.builder()
-                                                                        .rqId(rqId)
-                                                                        .correlId(rqId)
-                                                                        .payload(payload)
-                                                                    .build()
-                    ).subscribe(
-                            routeObjectSink(),
-                            // when errors happen we won't lose them and route according to the plan
-                            // until client outside receives a report
-                            error -> RoutedObjectEnvelope.builder()
-                                                                .rqId(rqId)
-                                                                .payload(error)
-                                                            .build()
-                    );
+                                            .rqId(rqId)
+                                            .correlId(rqId)
+                                            .payload(payload)
+                                            .build()
+                            ).subscribe(
+                                    routeObjectSink(),
+                                    // when errors happen we won't lose them and route according to the plan
+                                    // until client outside receives a report
+                                    error -> routeObjectSink().accept(
+                                            RoutedObjectEnvelope.builder()
+                                                    .rqId(rqId)
+                                                    .payload(error)
+                                                    .build()
+                                    )
+                            );
                 }
         );
 
