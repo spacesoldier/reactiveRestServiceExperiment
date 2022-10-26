@@ -34,25 +34,16 @@ public class IntLayerConfig {
     @Autowired
     private ApiClientImpl apiClientImplementation;
 
-    @Autowired
-    private List<ExternalResourceCallDefinition> externalResourceCallDefs;
 
     @Bean
     public ApiClientAdapter initApiClientAdapter(){
-        ApiClientAdapter adapter = ApiClientAdapter.builder()
+        return ApiClientAdapter.builder()
                                         .errorHandlerSink(  apiClientImplementation.errorHandlerSink()  )
                                         .routableFunctionSink(
                                             (rqType, handler) -> wiringAdapter.registerFeature(rqType,handler)
                                         )
-                                    .build();
+                                .build();
 
-        if (externalResourceCallDefs != null && !externalResourceCallDefs.isEmpty()){
-            externalResourceCallDefs.forEach(
-                    extCallDef -> adapter.registerResourceClient(extCallDef)
-            );
-        }
-
-        return adapter;
     }
 
     @Bean

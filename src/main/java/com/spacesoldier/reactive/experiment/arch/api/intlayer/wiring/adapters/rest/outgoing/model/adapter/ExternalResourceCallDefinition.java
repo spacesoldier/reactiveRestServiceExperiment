@@ -1,7 +1,6 @@
 package com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters.rest.outgoing.model.adapter;
 
 import lombok.Builder;
-import lombok.Data;
 import lombok.Getter;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
@@ -12,7 +11,7 @@ import java.util.Map;
 import java.util.function.Function;
 
 
-public class ExternalResourceCallDefinition<T> {
+public class ExternalResourceCallDefinition<T,R> {
     @Getter
     private String path;
     @Getter
@@ -22,7 +21,7 @@ public class ExternalResourceCallDefinition<T> {
     private Class outgoingMsgType;
 
     @Getter
-    private Function<T, CorePublisher> resourceInvocationCall;
+    private Function<T, ? extends CorePublisher<R>> resourceInvocationCall;
 
     @Getter
     private Map<HttpStatus, Function<String, Throwable>> failStatusHandlers;
@@ -32,7 +31,7 @@ public class ExternalResourceCallDefinition<T> {
             String path,
             HttpMethod method,
             Class outgoingMsgType,
-            Function<T, CorePublisher> resourceInvocationCall,
+            Function<T, ? extends CorePublisher<R>> resourceInvocationCall,
             Map<HttpStatus, Function> errorHandlers
     ){
         this.path = path;
