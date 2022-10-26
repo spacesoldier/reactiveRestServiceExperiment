@@ -42,4 +42,13 @@ public class ResourceCallDescriptor {
 
         return result;
     }
+
+    // need to define the hashCode function otherwise the class will be unusable as hashmap key
+    @Override
+    public int hashCode() {
+        int result = 1;
+        result = 31 * result + path.hashCode();
+        result = 31 * result + method.hashCode();
+        return result;
+    }
 }
