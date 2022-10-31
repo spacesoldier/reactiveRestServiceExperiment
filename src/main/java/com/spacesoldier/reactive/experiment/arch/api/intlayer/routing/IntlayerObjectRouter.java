@@ -4,10 +4,10 @@ import com.spacesoldier.reactive.experiment.arch.api.intlayer.routing.model.Rout
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.routing.model.RoutingUnit;
 import lombok.Builder;
 import lombok.extern.slf4j.Slf4j;
-import org.reactivestreams.Publisher;
 import reactor.core.CorePublisher;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
 
 import java.util.*;
@@ -82,31 +82,46 @@ public class IntlayerObjectRouter {
         log.info(String.format(routerInitLogMsgTemplate, routableUnitName));
 
         routeRecord.add(
-                            RoutingUnit.builder()
-                                            .name(routableUnitName)
-                                            .inputType(typeToRoute)
-                                            .call(routeToFn)
-                                        .build()
-                        );
+                RoutingUnit.builder()
+                        .name(routableUnitName)
+                        .inputType(typeToRoute)
+                        .call(routeToFn)
+                        .build()
+        );
     }
 
     private void buildRoutingTable(){
         routingUnits.entrySet().stream()
-                                .map(
-                                        entry -> {
-                                            List<RoutingUnit> units = entry.getValue();
+                .map(
+                        entry -> {
+                            List<RoutingUnit> units = entry.getValue();
 
-                                            List<String> uNames = units.stream().map(
-                                                    unit -> unit.getName()
-                                            ).collect(Collectors.toList());
+                            List<String> uNames = units.stream().map(
+                                    unit -> unit.getName()
+                            ).collect(Collectors.toList());
 
-                                            routingTable.put(entry.getKey(), uNames);
+                            routingTable.put(entry.getKey(), uNames);
 
-                                            return uNames;
-                                        }
-                                    )
-                                .toList();
+                            return uNames;
+                        }
+                )
+                .toList();
         log.info("[ROUTER]: routing table built");
+    }
+
+    private final Scheduler fluxPool = Schedulers.newParallel("flux outs");
+    private final Scheduler monoPool = Schedulers.newParallel("mono outs");
+
+    private Function<Object,RoutedObjectEnvelope> envelopeObjectToRoute(String requestId){
+        return payload -> {
+            log.info("RqId: "+ requestId);
+
+            return RoutedObjectEnvelope.builder()
+                    .rqId(requestId)
+                    .correlId(requestId)
+                    .payload(payload)
+                    .build();
+        };
     }
 
     private void handlePublisherOutputs(String rqId, CorePublisher publisher){
@@ -131,14 +146,9 @@ public class IntlayerObjectRouter {
         // very dumb part, sorry
         if (fluxPub != null){
             fluxPub
-                    .publishOn(Schedulers.newParallel("route flux outs"))
-                    .map(
-                            payload -> RoutedObjectEnvelope.builder()
-                                    .rqId(rqId)
-                                    .correlId(rqId)
-                                    .payload(payload)
-                                    .build()
-                    ).subscribe(
+                    .publishOn(fluxPool)
+                    .map(   envelopeObjectToRoute(rqId) )
+                    .subscribe(
                             routeObjectSink(),
                             // when errors happen we won't lose them and route according to the plan
                             // until client outside receives a report
@@ -152,13 +162,9 @@ public class IntlayerObjectRouter {
         } else {
             if (monoPub != null){
                 monoPub
-                        .publishOn(Schedulers.newParallel("route mono outs"))
-                        .map(
-                                payload -> RoutedObjectEnvelope.builder()
-                                        .rqId(rqId)
-                                        .payload(payload)
-                                        .build()
-                        ).subscribe(
+                        .publishOn(monoPool)
+                        .map(   envelopeObjectToRoute(rqId) )
+                        .subscribe(
                                 routeObjectSink(),
                                 error -> routeObjectSink().accept(
                                         RoutedObjectEnvelope.builder()
@@ -204,7 +210,7 @@ public class IntlayerObjectRouter {
                             .filter(sink -> sink != null)
                             .toList()
             );
-            log.info("route");
+            //log.info("route");
         }
 
 
@@ -230,39 +236,39 @@ public class IntlayerObjectRouter {
 
     private void buildStreams(){
         allStreams = routingUnits.entrySet()
-                        .stream()
-                        .flatMap(
-                              entry -> {
-                                  List<Flux> streams =
-                                          entry.getValue()
-                                                .stream()
-                                                .map(
-                                                   unit -> {
-                                                       Function logicFn = functionDecorator != null         ?
-                                                                            functionDecorator.apply(
-                                                                                    unit.getInputType(),
-                                                                                    unit.getCall()
-                                                                            )                               :
-                                                                            defaultFunctionDecorator(
-                                                                                    unit.getCall()
-                                                                            );
+                .stream()
+                .flatMap(
+                        entry -> {
+                            List<Flux> streams =
+                                    entry.getValue()
+                                            .stream()
+                                            .map(
+                                                    unit -> {
+                                                        Function logicFn = functionDecorator != null         ?
+                                                                functionDecorator.apply(
+                                                                        unit.getInputType(),
+                                                                        unit.getCall()
+                                                                )                               :
+                                                                defaultFunctionDecorator(
+                                                                        unit.getCall()
+                                                                );
 
-                                                       Flux stream = null;
+                                                        Flux stream = null;
 
-                                                       if (fluxProvider != null){
-                                                           stream = fluxProvider.apply(unit.getName());
-                                                           stream = stream.map(logicFn);
-                                                       }
+                                                        if (fluxProvider != null){
+                                                            stream = fluxProvider.apply(unit.getName());
+                                                            stream = stream.map(logicFn);
+                                                        }
 
-                                                       return stream;
-                                                   }
-                                                )
-                                                .filter(Objects::nonNull)
-                                                .toList();
-                                  return streams.stream();
-                              }
-                        )
-                        .toList();
+                                                        return stream;
+                                                    }
+                                            )
+                                            .filter(Objects::nonNull)
+                                            .toList();
+                            return streams.stream();
+                        }
+                )
+                .toList();
     }
 
     public void subscribeToAllStreams(){
@@ -289,9 +295,9 @@ public class IntlayerObjectRouter {
             log.info(String.format(logTemplate,rqId));
             routeObjectSink().accept(
                     RoutedObjectEnvelope.builder()
-                                                .rqId(rqId)
-                                                .payload(payload)
-                                            .build()
+                            .rqId(rqId)
+                            .payload(payload)
+                            .build()
             );
         };
     }
