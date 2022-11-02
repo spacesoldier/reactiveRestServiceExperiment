@@ -114,7 +114,7 @@ public class IntlayerObjectRouter {
 
     private Function<Object,RoutedObjectEnvelope> envelopeObjectToRoute(String requestId){
         return payload -> {
-            log.info("RqId: "+ requestId);
+            //log.info("RqId: "+ requestId);
 
             return RoutedObjectEnvelope.builder()
                     .rqId(requestId)
@@ -157,7 +157,11 @@ public class IntlayerObjectRouter {
                                             .rqId(rqId)
                                             .payload(error)
                                             .build()
-                            )
+                            ),
+                            () -> {
+                                // let's perform an action when the publisher finishes the transmission
+                                log.info("flux "+ rqId+ " completed");
+                            }
                     );
         } else {
             if (monoPub != null){
