@@ -3,6 +3,7 @@ package com.spacesoldier.reactive.experiment.arch.api.intlayer.routing;
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.routing.model.RoutedObjectEnvelope;
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.routing.model.RoutingUnit;
 import lombok.Builder;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.CorePublisher;
 import reactor.core.publisher.Flux;
@@ -30,6 +31,9 @@ public class IntlayerObjectRouter {
 
     private BiFunction<Class,Function,Function> functionDecorator;
 
+    @Setter
+    private Runnable onRouterReadyAction;
+
     private Function<RoutedObjectEnvelope,RoutedObjectEnvelope> defaultFunctionDecorator(
             Function fnToDecorate
     ){
@@ -55,12 +59,14 @@ public class IntlayerObjectRouter {
             Function<String,Flux> fluxProvider,
             Function<String,Consumer> sinkByRqIdProvider,
             Function<String,Consumer> sinkByChannelNameProvider,
-            BiFunction<Class, Function, Function> functionDecorator
+            BiFunction<Class, Function, Function> functionDecorator,
+            Runnable onRouterReadyAction
     ){
         this.fluxProvider = fluxProvider;
         this.sinkByRqIdProvider = sinkByRqIdProvider;
         this.sinkByChannelNameProvider = sinkByChannelNameProvider;
         this.functionDecorator = functionDecorator;
+        this.onRouterReadyAction = onRouterReadyAction;
     }
 
     private String routerInitLogMsgTemplate = "[ROUTER]: add routable unit %s";
@@ -289,6 +295,9 @@ public class IntlayerObjectRouter {
         buildRoutingTable();
         buildStreams();
         subscribeToAllStreams();
+        if (onRouterReadyAction != null){
+            onRouterReadyAction.run();
+        }
     }
 
     public BiConsumer<String, Object> singleRequestsInput(){
