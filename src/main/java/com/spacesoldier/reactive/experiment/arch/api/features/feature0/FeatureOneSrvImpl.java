@@ -14,7 +14,7 @@ public class FeatureOneSrvImpl implements FirstFeatureService {
         log.info("[FEATURE 1] request received");
 
         return FeatureOneResponse.builder()
-                .payload("beeep beeeep beeeeeeeeeeeeeeep")
+                .payload("beeep beeeep beeeeeeeeeeeeeeep wtf")
                 .build();
     }
 }
