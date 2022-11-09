@@ -72,8 +72,12 @@ public class WiringAdapter {
     }
 
     public boolean featureIsActive(Class typeToProcess){
-        // normally we obtain true
-        boolean isActive = featureActiveFlags.get(typeToProcess);
+        boolean isActive = false;
+
+        if (featureActiveFlags.containsKey(typeToProcess)){
+            // normally we obtain true
+            isActive = featureActiveFlags.get(typeToProcess);
+        }
 
         return isActive;
     }
