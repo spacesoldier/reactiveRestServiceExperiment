@@ -8,6 +8,7 @@ import java.util.function.Function;
 
 public interface SecondFeatureService {
 
+    static String FEATURE_TWO_SRV_READY = "prepare feature two";
     static Function<RestRequestEnvelope, Object> transformRequest(){
         return envelope -> {
 

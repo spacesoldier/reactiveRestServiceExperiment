@@ -8,7 +8,7 @@ import java.util.Map;
 import java.util.function.Function;
 
 public interface ThirdFeatureService {
-
+    static String FEATURE_THREE_READY = "prepare feature three";
     static Function<RestRequestEnvelope, Object> transformRequest(){
         return envelope -> {
 
