@@ -42,7 +42,11 @@ public class FeatureThreeConfig {
 
         wiringAdapter.registerFeature(
                 ThirdFeatureServiceRequest.class,
-                request -> thirdFeatureService.performFeatureLogic((ThirdFeatureServiceRequest) request)
+                request -> thirdFeatureService.performFeatureLogic((ThirdFeatureServiceRequest) request),
+                 new HashSet<>(){{
+                     add(FirstFeatureService.FEATURE_ONE_READY);
+                     add(SecondFeatureService.FEATURE_TWO_SRV_READY);
+                 }}
         );
     }
 }

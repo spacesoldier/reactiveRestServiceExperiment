@@ -1,15 +1,16 @@
 package com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters;
 
 import lombok.Builder;
-import lombok.Generated;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Scheduler;
+import reactor.core.scheduler.Schedulers;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
-import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -35,10 +36,57 @@ public class WiringAdapter {
         this.routableFunctionSink = routableFunctionSink;
     }
 
+    Map<Class,Boolean> featureActiveFlags = new HashMap<>();
+
     public void registerFeature(
             Class inputType,
             Function featureFunction
     ){
+        if (routableFunctionSink != null){
+            routableFunctionSink.accept(inputType, featureFunction);
+            featureActiveFlags.put(inputType,Boolean.TRUE);
+        }
+    }
+
+    Map<Class, Set<String>> requestProcessDependencies = new HashMap<>();
+
+    public boolean typeProcessHasDependencies(Class typeToProcess){
+        return requestProcessDependencies.containsKey(typeToProcess);
+    }
+
+    public boolean isProcessDependenciesReady(Class typeToProcess){
+        boolean result = true;
+
+        if (typeProcessHasDependencies(typeToProcess)){
+            result = actionsComplete.containsAll(requestProcessDependencies.get(typeToProcess));
+        }
+
+        return result;
+    }
+
+    public void activateFeature(Class typeToProcess){
+        if (featureActiveFlags.containsKey(typeToProcess)){
+            featureActiveFlags.put(typeToProcess,Boolean.TRUE);
+            log.info("[WIRING]: processing the "+typeToProcess.getSimpleName()+" activated");
+        }
+    }
+
+    public boolean featureIsActive(Class typeToProcess){
+        // normally we obtain true
+        boolean isActive = featureActiveFlags.get(typeToProcess);
+
+        return isActive;
+    }
+    public void registerFeature(
+            Class inputType,
+            Function featureFunction,
+            Set<String> dependsOn
+    ){
+        if (!typeProcessHasDependencies(inputType)){
+            requestProcessDependencies.put(inputType,dependsOn);
+            featureActiveFlags.put(inputType,Boolean.FALSE);
+        }
+
         if (routableFunctionSink != null){
             routableFunctionSink.accept(inputType, featureFunction);
         }
@@ -83,6 +131,58 @@ public class WiringAdapter {
         );
     }
 
+    private Map<String, Object> pausedRequests = new ConcurrentHashMap<>();
+    private Map<Class,List<String>> pausedRequestsIndex = new ConcurrentHashMap<>();
+
+    private void addRequestToIndex(Class rqType, String rqId){
+        if (!pausedRequestsIndex.containsKey(rqType)){
+            pausedRequestsIndex.put(rqType, new ArrayList<>());
+        }
+        pausedRequestsIndex.get(rqType).add(rqId);
+    }
+    private void pauseRequest(String rqId, Object payload){
+        if (!pausedRequests.containsKey(rqId)){
+            pausedRequests.put(rqId, payload);
+            addRequestToIndex(payload.getClass(),rqId);
+        }
+    }
+    private void revokePausedRequests(String featureReady){
+        Set<Class> featuresActivated = new HashSet<>();
+        List<String> revokedRequests = pausedRequestsIndex.entrySet()
+                                                        .stream()
+                                                        .filter(entry -> isProcessDependenciesReady(entry.getKey()))
+                                                        .peek(entry -> {
+                                                            activateFeature(entry.getKey());
+                                                            log.info("[WIRING]: activate processing "+entry.getKey().getSimpleName());
+                                                            featuresActivated.add(entry.getKey());
+                                                        })
+                                                        .flatMap(
+                                                                entry -> entry.getValue().stream()
+                                                        )
+                                                        .map(
+                                                                rqId -> {
+                                                                    receiveSingleRequest(rqId,pausedRequests.get(rqId));
+                                                                    log.info("[WIRING]: revoke request id "+rqId);
+                                                                    return rqId;
+                                                                }
+                                                        )
+                                                    .toList();
+        featuresActivated.forEach(
+                activeType -> {
+                    pausedRequestsIndex.remove(activeType);
+                }
+        );
+
+        revokedRequests.forEach(
+                rqId -> pausedRequests.remove(rqId)
+        );
+    }
+    private boolean isRequestInPausedQueue(String rqId){
+        return pausedRequests.containsKey(rqId);
+    }
+
+    private final Scheduler monoPool = Schedulers.newSingle("init_thread");
+
     private void invokeInitAction(
             String actionName,
             Supplier initAction
@@ -104,7 +204,11 @@ public class WiringAdapter {
                     if (monoProvider != null){
                         Mono initActionOutput = monoProvider.apply(rqId);
 
-                        initActionOutput.subscribe(
+                        initActionOutput
+                                // need to publish on a single thread to avoid work duplication
+                                // and brain shocking consequences
+                                .publishOn(monoPool)
+                                .subscribe(
                                 result -> {
                                     // remove action from wait list
                                     stopWaiting(actionName);
@@ -114,10 +218,15 @@ public class WiringAdapter {
                                     actionsComplete.add(actionName);
                                     log.info("[INIT]: initialize action "+actionName+" completed");
 
+                                    // now we can perform some waiting init actions
                                     invokeWaitingActions();
+
+                                    // and perform any paused requests which may depend on
+                                    // and were paused until required services are ready to run
+                                    revokePausedRequests(actionName);
                                 },
                                 error -> {
-                                    log.info("[INIT FAIL]: initialize action "+actionName+" failed");
+                                    log.info("[INIT FAIL]: initialize action "+actionName+" failed due to error "+error.getClass());
                                 }
                         );
                     }
@@ -177,9 +286,11 @@ public class WiringAdapter {
     @NotNull
     private Set<String> calcAllRequirementsSet() {
         Set<String> allRequirements = actionDependencies.entrySet()
-                .stream()
-                .flatMap(entry -> entry.getValue().stream())
-                .collect(Collectors.toSet());
+                                                            .stream()
+                                                            .flatMap(
+                                                                    entry -> entry.getValue().stream()
+                                                            )
+                                                        .collect(Collectors.toSet());
         return allRequirements;
     }
 
@@ -207,13 +318,25 @@ public class WiringAdapter {
     }
 
     public Mono initSingleRequest(String wireId){
-
+        // we can initialize the request process chain regardless of the results of application initialization stage
         return monoProvider.apply(wireId);
     }
 
+    // request processing may depend on results of the application initialization stage results
     public void receiveSingleRequest(String rqId, Object payload){
-        if (incomingMsgSink != null){
-            incomingMsgSink.accept(rqId,payload);
+        boolean clearToProcess = featureIsActive(payload.getClass());
+
+        if (clearToProcess){
+            if (incomingMsgSink != null){
+                incomingMsgSink.accept(rqId,payload);
+            }
+        } else {
+            log.info("[WIRING]: pause process of the request id "+ rqId);
+            if (!isRequestInPausedQueue(rqId)){
+                pauseRequest(rqId,payload);
+            } else {
+                log.info("[WIRING]: request "+ rqId + " still on pause");
+            }
         }
     }
 

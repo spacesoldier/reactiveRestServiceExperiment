@@ -34,7 +34,14 @@ public class FeatureTwoConfig {
 
         wiringAdapter.registerInitAction(
                 SecondFeatureService.FEATURE_TWO_SRV_READY,
-                () -> "[FEATURE 2]: Hey hey hey feature two init sequence message to anyone who interested",
+                () -> {
+                    try {
+                        Thread.sleep(20000);
+                    } catch (InterruptedException e) {
+                        log.info("[FEATURE 2]: wtf is happened here");
+                    }
+                    return "[FEATURE 2]: Hey hey hey feature two init sequence message to anyone who interested";
+                },
                 new HashSet<>(){{ add(FirstFeatureService.FEATURE_ONE_READY); }}
         );
 
