@@ -6,20 +6,20 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Consumer;
 
 // some sort of dynamic storage for wires
 // which could be used for connecting the reactive requests with responses
-
 public class MonoChannelProvider {
 
     @Builder
     private MonoChannelProvider(){
 
     }
-    private Map<String, MonoChannel> requestWires = new HashMap<>();
+    private Map<String, MonoChannel> requestWires = Collections.synchronizedMap(new HashMap<>());
 
     private final String unitName = "mono wiring manager";
     private final Logger logger = LoggerFactory.getLogger(unitName);
@@ -37,7 +37,7 @@ public class MonoChannelProvider {
         MonoChannel result = null;
         if (!requestWires.containsKey(wireId)){
             result = newWire(wireId);
-            logger.info(String.format("New request wiring: %s", wireId));
+            // logger.info(String.format("New request wiring: %s", wireId));
         } else {
             result = requestWires.get(wireId);
         }

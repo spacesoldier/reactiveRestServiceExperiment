@@ -68,7 +68,10 @@ public class IntlayerObjectRouter {
     }
 
     private String routerInitLogMsgTemplate = "[ROUTER]: add routable unit %s";
-    public void addRoutableFunction(Class typeToRoute, Function routeToFn){
+    public void addRoutableFunction(
+            Class typeToRoute,
+            Function routeToFn
+    ){
         if (!routingUnits.containsKey(typeToRoute)){
             routingUnits.put(typeToRoute, new ArrayList<>());
         }
@@ -113,8 +116,13 @@ public class IntlayerObjectRouter {
         log.info("[ROUTER]: routing table built");
     }
 
-    private final Scheduler fluxPool = Schedulers.newParallel("flux outs");
-    private final Scheduler monoPool = Schedulers.newParallel("mono outs");
+    //private final Scheduler fluxPool = Schedulers.newParallel("flux outs");
+    private final Scheduler fluxPool = Schedulers.newBoundedElastic(
+            16,
+            15000,
+            "flux outs"
+    );
+    private final Scheduler monoPool = Schedulers.newSingle("mono outs");
 
     private Function<Object,RoutedObjectEnvelope> envelopeObjectToRoute(String requestId){
         return payload -> {
@@ -136,14 +144,17 @@ public class IntlayerObjectRouter {
         try {
             fluxPub = (Flux) publisher;
         } catch (Exception e){
-            log.info("[ROUTER]: payload is not a flux");
+            // probably we got a Mono
+            // log.info("[ROUTER]: payload is not a flux");
         }
 
         if (fluxPub == null ){
+            // try to cast to Mono
             try {
                 monoPub = (Mono) publisher;
             } catch (Exception e){
-                log.info("[ROUTER]: payload is not a mono");
+                // ok, some unexpected sort of CorePublisher received
+                log.info("[ROUTER]: payload is not a mono, it is " + publisher.getClass().getSimpleName());
             }
         }
 
@@ -164,7 +175,7 @@ public class IntlayerObjectRouter {
                             ),
                             () -> {
                                 // let's perform an action when the publisher finishes the transmission
-                                log.info("flux "+ rqId+ " completed");
+                                // log.info("flux "+ rqId+ " completed");
                             }
                     );
         } else {
@@ -297,13 +308,20 @@ public class IntlayerObjectRouter {
             onRouterReadyAction.run();
         }
     }
+    public static String DISABLE_LOG_ID_MARKER = ">|<";
+    private boolean isInternalSignalId(String rqId){
+        String prefix = rqId.substring(0,3);
+        return prefix.equals(DISABLE_LOG_ID_MARKER);
+    }
 
     public BiConsumer<String, Object> singleRequestsInput(){
 
         String logTemplate = "[ROUTER]: request %s received";
 
         return (rqId, payload) -> {
-            log.info(String.format(logTemplate,rqId));
+            if (!isInternalSignalId(rqId)){
+                log.info(String.format(logTemplate,rqId));
+            }
             routeObjectSink().accept(
                     RoutedObjectEnvelope.builder()
                             .rqId(rqId)

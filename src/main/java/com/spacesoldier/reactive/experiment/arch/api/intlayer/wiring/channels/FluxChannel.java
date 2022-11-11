@@ -22,7 +22,8 @@ public class FluxChannel {
 
     private Sinks.Many loopbackSink;
 
-    @Getter @Setter
+    @Getter
+    @Setter
     private Disposable channelTask;
 
     @Getter
@@ -30,7 +31,7 @@ public class FluxChannel {
 
     private String adapterStatusMsgTemplate = "[%s ADAPTER]: %s , %s";
 
-    private Consumer logErrorStatus(String status){
+    private Consumer logErrorStatus(String status) {
 
         return
                 input -> logger.info(
@@ -43,9 +44,9 @@ public class FluxChannel {
     }
 
     // firstly it's only a monitoring, later there could be some handlers implementing additional logic
-    private EnumMap<Sinks.EmitResult, Consumer> emitResultHandlers = new EnumMap<>(Sinks.EmitResult.class){
+    private EnumMap<Sinks.EmitResult, Consumer> emitResultHandlers = new EnumMap<>(Sinks.EmitResult.class) {
         {
-            put(FAIL_TERMINATED,logErrorStatus("FAIL_TERMINATED"));
+            put(FAIL_TERMINATED, logErrorStatus("FAIL_TERMINATED"));
             put(FAIL_OVERFLOW, logErrorStatus("FAIL_OVERFLOW"));
             put(FAIL_CANCELLED, logErrorStatus("FAIL_CANCELLED"));
             put(FAIL_NON_SERIALIZED, msg -> {
@@ -57,38 +58,44 @@ public class FluxChannel {
                 });
                 logErrorStatus("RETRY FAIL_NON_SERIALIZED");
             });
-            put(FAIL_ZERO_SUBSCRIBER,logErrorStatus("FAIL_ZERO_SUBSCRIBER"));
+            put(FAIL_ZERO_SUBSCRIBER, logErrorStatus("FAIL_ZERO_SUBSCRIBER"));
         }
     };
 
-    public FluxChannel(String adapterName){
-        this.loopbackSink = Sinks.many().multicast().onBackpressureBuffer(512);
+    public FluxChannel(String adapterName) {
+        this.loopbackSink = Sinks.many().multicast().onBackpressureBuffer(15000);
         this.streamToSubscribe = this.loopbackSink.asFlux()
                 .publishOn(
                         Schedulers.newBoundedElastic(
                                 16,
-                                10000,
+                                15000,
                                 adapterName
                         )
                 ); // let it be a cold source, or use .share(); // if we want a hot source
         this.adapterName = adapterName;
     }
 
-    public Consumer getStreamInput(){
+    private synchronized Sinks.EmitResult publishMessage(Object message) {
+        return loopbackSink.tryEmitNext(message);
+    }
+
+    public Consumer getStreamInput() {
         String errMsgTemplate = "[%s STREAM ERROR]: %s";
         return message -> {
-            if (message != null){
-                Sinks.EmitResult sinkResult = loopbackSink.tryEmitNext(message);
+            if (message != null) {
+                //Sinks.EmitResult sinkResult = loopbackSink.tryEmitNext(message);
 
-                if (sinkResult.isFailure()){
-                    if (emitResultHandlers.containsKey(sinkResult)){
+                Sinks.EmitResult sinkResult = publishMessage(message);
+
+                if (sinkResult.isFailure()) {
+                    if (emitResultHandlers.containsKey(sinkResult)) {
 
                         logger.info(
                                 String.format(
                                         adapterStatusMsgTemplate,
                                         adapterName.toUpperCase(),
-                                        "emitResultError "+sinkResult,
-                                        "subscribers count "+ loopbackSink.currentSubscriberCount()
+                                        "emitResultError " + sinkResult,
+                                        "subscribers count " + loopbackSink.currentSubscriberCount()
                                 )
                         );
 

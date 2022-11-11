@@ -153,24 +153,24 @@ public class WiringAdapter {
     private void revokePausedRequests(String featureReady){
         Set<Class> featuresActivated = new HashSet<>();
         List<String> revokedRequests = pausedRequestsIndex.entrySet()
-                                                        .stream()
-                                                        .filter(entry -> isProcessDependenciesReady(entry.getKey()))
-                                                        .peek(entry -> {
-                                                            activateFeature(entry.getKey());
-                                                            log.info("[WIRING]: activate processing "+entry.getKey().getSimpleName());
-                                                            featuresActivated.add(entry.getKey());
-                                                        })
-                                                        .flatMap(
-                                                                entry -> entry.getValue().stream()
-                                                        )
-                                                        .map(
-                                                                rqId -> {
-                                                                    receiveSingleRequest(rqId,pausedRequests.get(rqId));
-                                                                    log.info("[WIRING]: revoke request id "+rqId);
-                                                                    return rqId;
-                                                                }
-                                                        )
-                                                    .toList();
+                .stream()
+                .filter(entry -> isProcessDependenciesReady(entry.getKey()))
+                .peek(entry -> {
+                    activateFeature(entry.getKey());
+                    log.info("[WIRING]: activate processing "+entry.getKey().getSimpleName());
+                    featuresActivated.add(entry.getKey());
+                })
+                .flatMap(
+                        entry -> entry.getValue().stream()
+                )
+                .map(
+                        rqId -> {
+                            receiveSingleRequest(rqId,pausedRequests.get(rqId));
+                            log.info("[WIRING]: revoke request id "+rqId);
+                            return rqId;
+                        }
+                )
+                .toList();
         featuresActivated.forEach(
                 activeType -> {
                     pausedRequestsIndex.remove(activeType);
@@ -203,7 +203,7 @@ public class WiringAdapter {
 
             if (!isActionInProgress(actionName)){
                 if (incomingMsgSink != null){
-                    String rqId = UUID.randomUUID().toString();
+                    String rqId = ">|< " + UUID.randomUUID();
 
                     if (monoProvider != null){
                         Mono initActionOutput = monoProvider.apply(rqId);
@@ -213,26 +213,26 @@ public class WiringAdapter {
                                 // and brain shocking consequences
                                 .publishOn(monoPool)
                                 .subscribe(
-                                result -> {
-                                    // remove action from wait list
-                                    stopWaiting(actionName);
-                                    // remove action from in progress list
-                                    progressCompleted(actionName);
-                                    // remember completed action name
-                                    actionsComplete.add(actionName);
-                                    log.info("[INIT]: initialize action "+actionName+" completed");
+                                        result -> {
+                                            // remove action from wait list
+                                            stopWaiting(actionName);
+                                            // remove action from in progress list
+                                            progressCompleted(actionName);
+                                            // remember completed action name
+                                            actionsComplete.add(actionName);
+                                            log.info("[INIT]: initialize action "+actionName+" completed");
 
-                                    // now we can perform some waiting init actions
-                                    invokeWaitingActions();
+                                            // now we can perform some waiting init actions
+                                            invokeWaitingActions();
 
-                                    // and perform any paused requests which may depend on
-                                    // and were paused until required services are ready to run
-                                    revokePausedRequests(actionName);
-                                },
-                                error -> {
-                                    log.info("[INIT FAIL]: initialize action "+actionName+" failed due to error "+error.getClass());
-                                }
-                        );
+                                            // and perform any paused requests which may depend on
+                                            // and were paused until required services are ready to run
+                                            revokePausedRequests(actionName);
+                                        },
+                                        error -> {
+                                            log.info("[INIT FAIL]: initialize action "+actionName+" failed due to error "+error.getClass());
+                                        }
+                                );
                     }
                     actionsInProgress.add(actionName);
                     incomingMsgSink.accept(rqId,initAction.get());
@@ -241,7 +241,6 @@ public class WiringAdapter {
             } else {
                 log.info("[INIT REPEAT]: action "+actionName+" already in progress");
             }
-
 
         }
 
@@ -290,11 +289,11 @@ public class WiringAdapter {
     @NotNull
     private Set<String> calcAllRequirementsSet() {
         Set<String> allRequirements = actionDependencies.entrySet()
-                                                            .stream()
-                                                            .flatMap(
-                                                                    entry -> entry.getValue().stream()
-                                                            )
-                                                        .collect(Collectors.toSet());
+                .stream()
+                .flatMap(
+                        entry -> entry.getValue().stream()
+                )
+                .collect(Collectors.toSet());
         return allRequirements;
     }
 
@@ -309,10 +308,10 @@ public class WiringAdapter {
                 Set<String> missingRequirements = calcAllRequirementsSet();
                 missingRequirements.removeAll(initActions.keySet());
                 String missingReqStr = missingRequirements.stream()
-                                                                .reduce(
-                                                                        "",
-                                                                        (report, item) -> report + " "+item+", "
-                                                                );
+                        .reduce(
+                                "",
+                                (report, item) -> report + " "+item+", "
+                        );
 
                 log.info("[INIT ERROR]: could not start due to missing dependencies: "+missingReqStr);
             }
@@ -326,16 +325,36 @@ public class WiringAdapter {
         return monoProvider.apply(wireId);
     }
 
+    private final Scheduler incomingRequests = Schedulers.newBoundedElastic(
+            8,
+            15000,
+            "incoming requests"
+    );
+
+    String pauseProcessMsgTemplate = "[WIRING]: pause process of the request %s id %s";
+
     // request processing may depend on results of the application initialization stage results
     public void receiveSingleRequest(String rqId, Object payload){
+
         boolean clearToProcess = featureIsActive(payload.getClass());
 
         if (clearToProcess){
             if (incomingMsgSink != null){
-                incomingMsgSink.accept(rqId,payload);
+                // it is important to start processing the messages in a separate thread pool
+                // otherwise the current thread could be a bit overloaded by all messages coming here
+                // and believe me this is the one of the key points of the whole application built on top
+                incomingRequests.schedule(
+                        () -> incomingMsgSink.accept(rqId,payload)
+                );
             }
         } else {
-            log.info("[WIRING]: pause process of the request id "+ rqId);
+            log.info(
+                    String.format(
+                            pauseProcessMsgTemplate,
+                            payload.getClass().getSimpleName(),
+                            rqId
+                    )
+            );
             if (!isRequestInPausedQueue(rqId)){
                 pauseRequest(rqId,payload);
             } else {
