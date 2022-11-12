@@ -6,6 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Flux;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -18,7 +19,7 @@ public class FluxChannelProvider {
     private FluxChannelProvider(){
 
     }
-    private Map<String, FluxChannel> requestStreams = new HashMap<>();
+    private final Map<String, FluxChannel> requestStreams = Collections.synchronizedMap(new HashMap<>());
 
     private final String unitName = "flux manager";
     private final Logger logger = LoggerFactory.getLogger(unitName);
@@ -62,3 +63,4 @@ public class FluxChannelProvider {
         return sink;
     }
 }
+

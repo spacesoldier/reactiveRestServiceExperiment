@@ -1,6 +1,6 @@
 package com.spacesoldier.reactive.experiment.arch.api.intlayer.config;
 
-import com.spacesoldier.reactive.experiment.arch.api.intlayer.routing.AppReadyListener;
+import com.spacesoldier.reactive.experiment.arch.api.intlayer.startup.AppReadyListener;
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.routing.IntlayerObjectRouter;
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.providers.FluxChannelProvider;
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.providers.MonoChannelProvider;

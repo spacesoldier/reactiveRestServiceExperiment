@@ -4,5 +4,6 @@ import com.spacesoldier.reactive.experiment.arch.api.features.feature0.model.Fea
 import com.spacesoldier.reactive.experiment.arch.api.features.feature0.model.FeatureOneResponse;
 
 public interface FirstFeatureService {
+    static String FEATURE_ONE_READY = "prepare feature one";
     FeatureOneResponse performFeatureLogic(FeatureOneRequest request);
 }

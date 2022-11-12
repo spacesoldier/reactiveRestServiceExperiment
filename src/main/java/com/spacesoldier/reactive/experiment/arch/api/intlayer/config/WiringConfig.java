@@ -18,7 +18,8 @@ public class WiringConfig {
 
     @Bean
     public WiringAdapter initWiringAdapter(){
-        return WiringAdapter.builder()
+
+        WiringAdapter wiring = WiringAdapter.builder()
                     .incomingMsgSink        (   intlayerObjectRouter.singleRequestsInput()                      )
                     .monoProvider           (
                                                 requestId -> monoChannelProvider.newWire(requestId)
@@ -32,5 +33,9 @@ public class WiringConfig {
                                                                                                 )
                                             )
                 .build();
+
+        intlayerObjectRouter.setOnRouterReadyAction(wiring.invokeInitActions());
+
+        return wiring;
     }
 }

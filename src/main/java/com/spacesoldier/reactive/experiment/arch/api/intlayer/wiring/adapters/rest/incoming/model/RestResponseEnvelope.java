@@ -1,4 +1,4 @@
-package com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters.rest.model;
+package com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters.rest.incoming.model;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Builder;

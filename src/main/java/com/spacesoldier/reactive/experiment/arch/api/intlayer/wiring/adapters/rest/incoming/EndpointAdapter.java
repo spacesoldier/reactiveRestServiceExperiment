@@ -1,6 +1,6 @@
-package com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters.rest;
+package com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters.rest.incoming;
 
-import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters.rest.model.*;
+import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters.rest.incoming.model.*;
 import lombok.Builder;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
@@ -34,7 +34,7 @@ public class EndpointAdapter {
 
     private BiConsumer<String, Object> asyncErrorSink;
 
-    private String redefineIOBindingWarning = "[WARN]: binding for %s already esxists - the %s, will replace it with %s";
+    private String redefineIOBindingWarning = "[WARN]: binding for %s already exists - the %s, will replace it with %s";
 
     public void registerRequestBuilder(
             Class extractType,
