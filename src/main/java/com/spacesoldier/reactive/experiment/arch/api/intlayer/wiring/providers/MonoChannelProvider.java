@@ -19,7 +19,7 @@ public class MonoChannelProvider {
     private MonoChannelProvider(){
 
     }
-    private Map<String, MonoChannel> requestWires = Collections.synchronizedMap(new HashMap<>());
+    private final Map<String, MonoChannel> requestWires = Collections.synchronizedMap(new HashMap<>());
 
     private final String unitName = "mono wiring manager";
     private final Logger logger = LoggerFactory.getLogger(unitName);

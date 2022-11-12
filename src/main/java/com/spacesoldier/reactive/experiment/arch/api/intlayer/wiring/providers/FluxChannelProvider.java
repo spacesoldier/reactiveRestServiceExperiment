@@ -19,7 +19,7 @@ public class FluxChannelProvider {
     private FluxChannelProvider(){
 
     }
-    private Map<String, FluxChannel> requestStreams = Collections.synchronizedMap(new HashMap<>());
+    private final Map<String, FluxChannel> requestStreams = Collections.synchronizedMap(new HashMap<>());
 
     private final String unitName = "flux manager";
     private final Logger logger = LoggerFactory.getLogger(unitName);
