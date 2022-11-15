@@ -181,6 +181,20 @@ public class WiringAdapter {
                 rqId -> pausedRequests.remove(rqId)
         );
     }
+
+    private void activateFeaturesByDependencies(){
+        Set<Class> featuresActivated = requestProcessDependencies.entrySet()
+                                    .stream()
+                                        .map    (   Map.Entry::getKey                               )
+                                        .filter (   feature -> !featureIsActive(feature)            )
+                                        .filter (   this::isProcessDependenciesReady                )
+                                        .peek   (   this::activateFeature                           )
+                                    .collect(Collectors.toSet());
+        featuresActivated.forEach(
+                feature -> log.info("[WIRING]: ready to receive "+feature.getSimpleName())
+        );
+    }
+
     private boolean isRequestInPausedQueue(String rqId){
         return pausedRequests.containsKey(rqId);
     }
@@ -228,6 +242,10 @@ public class WiringAdapter {
                                             // and perform any paused requests which may depend on
                                             // and were paused until required services are ready to run
                                             revokePausedRequests(actionName);
+
+                                            // check and activate features
+                                            // when no paused requests obtained during init stage
+                                            activateFeaturesByDependencies();
                                         },
                                         error -> {
                                             log.info("[INIT FAIL]: initialize action "+actionName+" failed due to error "+error.getClass());
