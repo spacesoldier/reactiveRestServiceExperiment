@@ -2,6 +2,22 @@ external-resources:
   google:
     base-url: https://google.com
 
+kafka-topics:
+  raw-events-stream: &RAW_EVENTS_STREAM incoming-event-stream-test
+
+reactor-kafka-config:
+  bootstrap-servers: ${KAFKA_BROKERS:188.72.108.143:9094,45.9.24.88:9094,87.242.121.153:9094}
+  bindings:
+    alldata-out-0:
+      destination: *RAW_EVENTS_STREAM
+  connections:
+    alldata-out-0:
+      producer:
+        client-id: "raw-events-sender"
+        acks: "all"
+        key-serializer: "integer"
+        value-serializer: "string"
+
 springdoc:
   swagger-ui:
     path: /api/swagger-ui

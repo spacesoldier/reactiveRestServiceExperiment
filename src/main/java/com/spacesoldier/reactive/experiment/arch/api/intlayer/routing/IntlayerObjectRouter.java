@@ -12,6 +12,7 @@ import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.*;
 import java.util.stream.Collectors;
 
@@ -65,6 +66,17 @@ public class IntlayerObjectRouter {
         this.sinkByChannelNameProvider = sinkByChannelNameProvider;
         this.functionDecorator = functionDecorator;
         this.onRouterReadyAction = onRouterReadyAction;
+    }
+
+    private Map<Class,BiFunction<Object,RoutedObjectEnvelope,Object>> aggregators = new ConcurrentHashMap<>();
+
+    public void addPostProcessAggregation(
+            Class typeToApplyAggregator,
+            BiFunction<Object,RoutedObjectEnvelope,Object> postProcessAggregator
+    ){
+        if (!aggregators.containsKey(typeToApplyAggregator)){
+            aggregators.put(typeToApplyAggregator,postProcessAggregator);
+        }
     }
 
     private String routerInitLogMsgTemplate = "[ROUTER]: add routable unit %s";
@@ -208,7 +220,23 @@ public class IntlayerObjectRouter {
         };
     }
 
-    private void routeBasicPayload(RoutedObjectEnvelope envelope) {
+    private RoutedObjectEnvelope postProcessPayload(RoutedObjectEnvelope envelope){
+
+        Class payloadType = envelope.getPayload().getClass();
+
+        if (aggregators.containsKey(payloadType)){
+            Object newPayload = aggregators.get(payloadType).apply(envelope.getPayload(),envelope);
+            envelope.setPayload(newPayload);
+        }
+
+        return envelope;
+    }
+
+    private void routeBasicPayload(RoutedObjectEnvelope incomingEnvelope) {
+        // sometimes we could want to aggregate the payload with envelope data
+        // for example to add requestId for some purpose
+        RoutedObjectEnvelope envelope = postProcessPayload(incomingEnvelope);
+
         Class routingType = envelope.getPayload().getClass();
 
         List<Consumer> sinks = new ArrayList<>();
@@ -263,11 +291,11 @@ public class IntlayerObjectRouter {
                                             .stream()
                                             .map(
                                                     unit -> {
-                                                        Function logicFn = functionDecorator != null         ?
+                                                        Function logicFn = functionDecorator != null ?
                                                                 functionDecorator.apply(
                                                                         unit.getInputType(),
                                                                         unit.getCall()
-                                                                )                               :
+                                                                )                                    :
                                                                 defaultFunctionDecorator(
                                                                         unit.getCall()
                                                                 );
@@ -308,10 +336,10 @@ public class IntlayerObjectRouter {
             onRouterReadyAction.run();
         }
     }
-    public static String DISABLE_LOG_ID_MARKER = ">|<";
+
     private boolean isInternalSignalId(String rqId){
         String prefix = rqId.substring(0,3);
-        return prefix.equals(DISABLE_LOG_ID_MARKER);
+        return prefix.equals(">|<");
     }
 
     public BiConsumer<String, Object> singleRequestsInput(){

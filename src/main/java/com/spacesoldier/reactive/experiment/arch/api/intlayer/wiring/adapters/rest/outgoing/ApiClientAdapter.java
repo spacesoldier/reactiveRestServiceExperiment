@@ -16,14 +16,20 @@ public class ApiClientAdapter {
 
     private BiConsumer<Class, Function> routableFunctionSink;
 
+    Function<Function, Function> bandwidthController; // decorator which may be provided by external rate limiter
+
     @Builder
     private ApiClientAdapter(
             BiConsumer<Class,Function> routableFunctionSink,
-            Consumer<ErrorStatusHandlerDefinition> errorHandlerSink
+            Consumer<ErrorStatusHandlerDefinition> errorHandlerSink,
+            Function bandwidthControllerInput
     ){
         this.routableFunctionSink = routableFunctionSink;
         this.errorHandlerSink = errorHandlerSink;
+        this.bandwidthController = bandwidthControllerInput;
     }
+
+
 
     public void registerResourceClient(ExternalResourceCallDefinition resourceCallDefinition){
 
@@ -34,22 +40,27 @@ public class ApiClientAdapter {
                 errorHandlers.forEach(
                         (errorStatus, errorHandler) -> errorHandlerSink.accept(
                                 ErrorStatusHandlerDefinition.builder()
-                                                                .path(resourceCallDefinition.getPath())
-                                                                .method(resourceCallDefinition.getMethod())
-                                                                .errorStatus(errorStatus)
-                                                                .errorHandler(errorHandler)
-                                                            .build()
+                                        .path(resourceCallDefinition.getPath())
+                                        .method(resourceCallDefinition.getMethod())
+                                        .errorStatus(errorStatus)
+                                        .errorHandler(errorHandler)
+                                        .build()
                         )
                 );
             }
         }
 
+        Function invocationCall = bandwidthController == null ?
+                resourceCallDefinition.getResourceInvocationCall() :
+                bandwidthController.apply(resourceCallDefinition.getResourceInvocationCall());
+
         if (routableFunctionSink != null){
             routableFunctionSink.accept(
                     resourceCallDefinition.getOutgoingMsgType(),
-                    resourceCallDefinition.getResourceInvocationCall()
+                    invocationCall
             );
         }
     }
 
 }
+
