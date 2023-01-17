@@ -43,7 +43,6 @@ public class ResourceCallDescriptor {
         return result;
     }
 
-    // need to define the hashCode function otherwise the class will be unusable as hashmap key
     @Override
     public int hashCode() {
         int result = 1;

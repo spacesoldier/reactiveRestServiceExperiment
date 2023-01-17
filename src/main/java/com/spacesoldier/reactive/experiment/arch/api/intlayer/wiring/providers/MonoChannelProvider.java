@@ -13,13 +13,14 @@ import java.util.function.Consumer;
 
 // some sort of dynamic storage for wires
 // which could be used for connecting the reactive requests with responses
+
 public class MonoChannelProvider {
 
     @Builder
     private MonoChannelProvider(){
 
     }
-    private final Map<String, MonoChannel> requestWires = Collections.synchronizedMap(new HashMap<>());
+    private Map<String, MonoChannel> requestWires = Collections.synchronizedMap(new HashMap<>());
 
     private final String unitName = "mono wiring manager";
     private final Logger logger = LoggerFactory.getLogger(unitName);
@@ -46,7 +47,13 @@ public class MonoChannelProvider {
 
     // get the object sink for publishing the items
     public Consumer getInput(String wireId){
-        return wireOnDemand(wireId).getMonoInput();
+        Consumer output = null;
+
+        MonoChannel wire = wireOnDemand(wireId);
+        if (wire != null){
+            output = wire.getMonoInput();
+        }
+        return output;
     }
 
     // get the mono for sending it to the clients

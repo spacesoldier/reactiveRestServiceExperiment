@@ -184,12 +184,12 @@ public class WiringAdapter {
 
     private void activateFeaturesByDependencies(){
         Set<Class> featuresActivated = requestProcessDependencies.entrySet()
-                                    .stream()
-                                        .map    (   Map.Entry::getKey                               )
-                                        .filter (   feature -> !featureIsActive(feature)            )
-                                        .filter (   this::isProcessDependenciesReady                )
-                                        .peek   (   this::activateFeature                           )
-                                    .collect(Collectors.toSet());
+                .stream()
+                .map    (   Map.Entry::getKey                               )
+                .filter (   feature -> !featureIsActive(feature)            )
+                .filter (   this::isProcessDependenciesReady                )
+                .peek   (   this::activateFeature                           )
+                .collect(Collectors.toSet());
         featuresActivated.forEach(
                 feature -> log.info("[WIRING]: ready to receive "+feature.getSimpleName())
         );
@@ -346,7 +346,7 @@ public class WiringAdapter {
     private final Scheduler incomingRequests = Schedulers.newBoundedElastic(
             8,
             15000,
-            "incoming requests"
+            "request pool"
     );
 
     String pauseProcessMsgTemplate = "[WIRING]: pause process of the request %s id %s";

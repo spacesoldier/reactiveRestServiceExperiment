@@ -14,8 +14,8 @@ import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters.re
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters.rest.outgoing.model.client.JavaTimeFormatter;
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters.rest.outgoing.model.client.RFC3339DateFormat;
 import lombok.Builder;
+import org.jetbrains.annotations.Nullable;
 import org.openapitools.jackson.nullable.JsonNullableModule;
-import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.*;
 import org.springframework.http.client.reactive.ClientHttpRequest;
 import org.springframework.http.codec.json.Jackson2JsonDecoder;
@@ -32,8 +32,6 @@ import org.springframework.web.reactive.function.client.ExchangeStrategies;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClient.ResponseSpec;
 import org.springframework.web.util.UriComponentsBuilder;
-
-import org.jetbrains.annotations.Nullable;
 import reactor.core.publisher.Mono;
 
 import java.text.DateFormat;
@@ -531,7 +529,7 @@ public class ApiClientImpl extends JavaTimeFormatter {
 
 
     private Map<
-                ResourceCallDescriptor,
+            ResourceCallDescriptor,
                 Map<
                         HttpStatus,
                         Function<

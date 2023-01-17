@@ -1,5 +1,6 @@
 package com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters.rest.incoming;
 
+import com.spacesoldier.reactive.experiment.arch.api.intlayer.routing.model.RequestPriority;
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters.rest.incoming.model.*;
 import lombok.Builder;
 import lombok.NonNull;
@@ -14,6 +15,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -51,15 +53,19 @@ public class EndpointAdapter {
         }
     }
 
+    BiFunction<String, RequestPriority, String> requestPrioritySetter = null;
+
     @Builder
     private EndpointAdapter(
             Function<String,Mono> monoProvider,
             BiConsumer<String, Object> requestSink,
-            BiConsumer<String, Object> errorSink
+            BiConsumer<String, Object> errorSink,
+            BiFunction<String,RequestPriority,String> requestPrioritySetter
     ){
         this.singleRequestsReceiver = monoProvider;
         this.intlayerInputSink = requestSink;
         this.asyncErrorSink = errorSink;
+        this.requestPrioritySetter = requestPrioritySetter;
     }
 
     private Function<Object, RestRequestEnvelope> wrapRequestEnvelope(ServerRequest req){
@@ -88,7 +94,13 @@ public class EndpointAdapter {
                 }
             } else {
                 if (intlayerInputSink != null){
-                    intlayerInputSink.accept(rqId, request);
+                    String prioritiseRqId = rqId;
+
+                    if (requestPrioritySetter != null){
+                        prioritiseRqId = requestPrioritySetter.apply(rqId, RequestPriority.USER_LEVEL);
+                    }
+
+                    intlayerInputSink.accept(prioritiseRqId, request);
                 } else {
                     if (asyncErrorSink != null){
 

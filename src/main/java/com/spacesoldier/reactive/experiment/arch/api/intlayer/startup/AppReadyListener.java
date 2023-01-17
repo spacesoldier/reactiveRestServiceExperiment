@@ -17,7 +17,7 @@ public class AppReadyListener implements ApplicationListener<ApplicationReadyEve
 
         Map<String, ExternalResourceCallDefinition> externalResourceCallDefs = context.getBeansOfType(ExternalResourceCallDefinition.class);
 
-        if (!externalResourceCallDefs.isEmpty()) {
+        if (!externalResourceCallDefs.isEmpty()){
 
             ApiClientAdapter adapter = context.getBean(ApiClientAdapter.class);
 
@@ -26,22 +26,10 @@ public class AppReadyListener implements ApplicationListener<ApplicationReadyEve
             );
         }
 
-        ReactorKafkaAdapter kafkaAdapter = context.getBean(ReactorKafkaAdapter.class);
-
-        if (kafkaAdapter != null) {
-            // collect the configuration items
-            // prepare inbound and outbound channels
-            kafkaAdapter.prepareForOperations();
-        }
-
         IntlayerObjectRouter objectRouter = context.getBean(IntlayerObjectRouter.class);
 
         objectRouter.start();
-
-        if (kafkaAdapter != null) {
-            // when object router is operational
-            // start listening to topics and produce messages
-            kafkaAdapter.startOperations();
-        }
     }
+
+
 }

@@ -18,7 +18,6 @@ public class WiringConfig {
 
     @Bean
     public WiringAdapter initWiringAdapter(){
-
         WiringAdapter wiring = WiringAdapter.builder()
                     .incomingMsgSink        (   intlayerObjectRouter.singleRequestsInput()                      )
                     .monoProvider           (

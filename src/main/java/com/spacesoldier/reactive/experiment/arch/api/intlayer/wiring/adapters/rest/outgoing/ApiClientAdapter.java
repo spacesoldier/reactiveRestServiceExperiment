@@ -40,19 +40,19 @@ public class ApiClientAdapter {
                 errorHandlers.forEach(
                         (errorStatus, errorHandler) -> errorHandlerSink.accept(
                                 ErrorStatusHandlerDefinition.builder()
-                                        .path(resourceCallDefinition.getPath())
-                                        .method(resourceCallDefinition.getMethod())
-                                        .errorStatus(errorStatus)
-                                        .errorHandler(errorHandler)
-                                        .build()
+                                                                .path(resourceCallDefinition.getPath())
+                                                                .method(resourceCallDefinition.getMethod())
+                                                                .errorStatus(errorStatus)
+                                                                .errorHandler(errorHandler)
+                                                            .build()
                         )
                 );
             }
         }
 
         Function invocationCall = bandwidthController == null ?
-                resourceCallDefinition.getResourceInvocationCall() :
-                bandwidthController.apply(resourceCallDefinition.getResourceInvocationCall());
+                                    resourceCallDefinition.getResourceInvocationCall() :
+                                    bandwidthController.apply(resourceCallDefinition.getResourceInvocationCall());
 
         if (routableFunctionSink != null){
             routableFunctionSink.accept(
@@ -63,4 +63,3 @@ public class ApiClientAdapter {
     }
 
 }
-

@@ -20,7 +20,6 @@ import java.util.function.Function;
 
 @Slf4j
 public class ApiClient {
-
     @Setter
     private Function<QueryParamConfig,MultiValueMap<String, String>> paramToMVMapConverter;
 

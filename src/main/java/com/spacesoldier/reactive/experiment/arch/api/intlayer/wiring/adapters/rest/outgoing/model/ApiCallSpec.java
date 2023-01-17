@@ -2,7 +2,6 @@ package com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters.r
 
 import lombok.Builder;
 import lombok.Data;
-import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
@@ -12,7 +11,7 @@ import java.util.List;
 import java.util.Map;
 
 @Data @Builder
-public class ApiCallSpec{
+public class ApiCallSpec {
     String path;
     HttpMethod method;
     Map<String, Object> pathParams;

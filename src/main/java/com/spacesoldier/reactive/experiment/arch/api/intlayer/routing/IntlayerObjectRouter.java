@@ -1,5 +1,6 @@
 package com.spacesoldier.reactive.experiment.arch.api.intlayer.routing;
 
+import com.spacesoldier.reactive.experiment.arch.api.intlayer.routing.model.RequestPriority;
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.routing.model.RoutedObjectEnvelope;
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.routing.model.RoutingUnit;
 import lombok.Builder;
@@ -13,7 +14,10 @@ import reactor.core.scheduler.Schedulers;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.*;
+import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
+import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -28,6 +32,11 @@ public class IntlayerObjectRouter {
     private Function<String,Consumer> sinkByChannelNameProvider;
 
     private BiFunction<Class,Function,Function> functionDecorator;
+
+    private Function<String, Boolean> requestPriorityDetector;
+    private Function<String, RequestPriority> requestPriorityExtractor;
+
+    private Function<String, String> removePriorityFromRqId;
 
 
     @Setter
@@ -47,8 +56,10 @@ public class IntlayerObjectRouter {
             }
 
             return RoutedObjectEnvelope.builder()
-                    .rqId(envelope.getRqId())
-                    .payload(result)
+                        .rqId(envelope.getRqId())
+                        .correlId(envelope.getCorrelId())
+                        .priority(envelope.getPriority())
+                        .payload(result)
                     .build();
         };
     }
@@ -59,6 +70,9 @@ public class IntlayerObjectRouter {
             Function<String,Consumer> sinkByRqIdProvider,
             Function<String,Consumer> sinkByChannelNameProvider,
             BiFunction<Class, Function, Function> functionDecorator,
+            Function<String, Boolean> requestPriorityDetector,
+            Function<String, RequestPriority> requestPriorityExtractor,
+            Function<String, String> removePriorityFromRqId,
             Runnable onRouterReadyAction
     ){
         this.fluxProvider = fluxProvider;
@@ -66,16 +80,21 @@ public class IntlayerObjectRouter {
         this.sinkByChannelNameProvider = sinkByChannelNameProvider;
         this.functionDecorator = functionDecorator;
         this.onRouterReadyAction = onRouterReadyAction;
+        this.requestPriorityDetector = requestPriorityDetector;
+        this.requestPriorityExtractor = requestPriorityExtractor;
+        this.removePriorityFromRqId = removePriorityFromRqId;
     }
 
     private Map<Class,BiFunction<Object,RoutedObjectEnvelope,Object>> aggregators = new ConcurrentHashMap<>();
 
-    public void addPostProcessAggregation(
+    private final Map<Class,BiFunction<Object,RoutedObjectEnvelope,RoutedObjectEnvelope>> envelopeAggr = new ConcurrentHashMap<>();
+
+    public void addEnvelopeAggregation(
             Class typeToApplyAggregator,
-            BiFunction<Object,RoutedObjectEnvelope,Object> postProcessAggregator
+            BiFunction<Object,RoutedObjectEnvelope,RoutedObjectEnvelope> envelopeAggregator
     ){
-        if (!aggregators.containsKey(typeToApplyAggregator)){
-            aggregators.put(typeToApplyAggregator,postProcessAggregator);
+        if (!envelopeAggr.containsKey(typeToApplyAggregator)){
+            envelopeAggr.put(typeToApplyAggregator,envelopeAggregator);
         }
     }
 
@@ -90,8 +109,11 @@ public class IntlayerObjectRouter {
 
         List<RoutingUnit> routeRecord = routingUnits.get(typeToRoute);
 
-        String routableUnitNameTemplate = "%sProcessor-%s";
-        String routeTypeName = typeToRoute != null? typeToRoute.getSimpleName() : "object";
+        String routableUnitNameTemplate = "%s-%s";
+        String routeTypeName = typeToRoute != null  ?
+                                typeToRoute.getSimpleName()
+                                            .replaceAll("[aeiou]", "") :
+                                "object"                                               ;
         String routableUnitName = String.format(
                 routableUnitNameTemplate,
                 routeTypeName,
@@ -102,10 +124,10 @@ public class IntlayerObjectRouter {
 
         routeRecord.add(
                 RoutingUnit.builder()
-                        .name(routableUnitName)
-                        .inputType(typeToRoute)
-                        .call(routeToFn)
-                        .build()
+                                .name(routableUnitName)
+                                .inputType(typeToRoute)
+                                .call(routeToFn)
+                            .build()
         );
     }
 
@@ -140,12 +162,53 @@ public class IntlayerObjectRouter {
         return payload -> {
             //log.info("RqId: "+ requestId);
 
+            RequestPriority priority = null;
+            String rqId = requestId;
+
+            if (requestIsPrioritised(requestId)){
+                priority = extractPriority(requestId);
+                rqId = removePriorityFromRqId(requestId);
+            }
+            if (priority == null){
+                priority = RequestPriority.BACKGROUND;
+            }
+
             return RoutedObjectEnvelope.builder()
-                    .rqId(requestId)
-                    .correlId(requestId)
-                    .payload(payload)
-                    .build();
+                                            .rqId(rqId)
+                                            .correlId(requestId)
+                                            .priority(priority)
+                                            .payload(payload)
+                                        .build();
         };
+    }
+
+    private boolean requestIsPrioritised(String requestId){
+        boolean result = false;
+
+        if (requestPriorityDetector != null){
+            Boolean isPrioritised = requestPriorityDetector.apply(requestId);
+            result = isPrioritised;
+        }
+
+        return result;
+    }
+    private RequestPriority extractPriority(String requestId) {
+        RequestPriority priority = RequestPriority.BACKGROUND;
+
+        if (requestPriorityExtractor != null){
+            priority = requestPriorityExtractor.apply(requestId);
+        }
+        return priority;
+    }
+
+    private String removePriorityFromRqId(String requestId){
+        String output = requestId;
+
+        if (removePriorityFromRqId != null){
+            output = removePriorityFromRqId.apply(requestId);
+        }
+
+        return output;
     }
 
     private void handlePublisherOutputs(String rqId, CorePublisher publisher){
@@ -181,9 +244,10 @@ public class IntlayerObjectRouter {
                             // until client outside receives a report
                             error -> routeObjectSink().accept(
                                     RoutedObjectEnvelope.builder()
-                                            .rqId(rqId)
-                                            .payload(error)
-                                            .build()
+                                                                .rqId(rqId)
+                                                                .priority(RequestPriority.USER_LEVEL)
+                                                                .payload(error)
+                                                            .build()
                             ),
                             () -> {
                                 // let's perform an action when the publisher finishes the transmission
@@ -199,9 +263,10 @@ public class IntlayerObjectRouter {
                                 routeObjectSink(),
                                 error -> routeObjectSink().accept(
                                         RoutedObjectEnvelope.builder()
-                                                .rqId(rqId)
-                                                .payload(error)
-                                                .build()
+                                                                .rqId(rqId)
+                                                                .priority(RequestPriority.USER_LEVEL)
+                                                                .payload(error)
+                                                            .build()
                                 )
                         );
             }
@@ -220,31 +285,61 @@ public class IntlayerObjectRouter {
         };
     }
 
-    private RoutedObjectEnvelope postProcessPayload(RoutedObjectEnvelope envelope){
+    private RoutedObjectEnvelope envelopeAggregation(RoutedObjectEnvelope envelope){
 
-        Class payloadType = envelope.getPayload().getClass();
+        RoutedObjectEnvelope output = envelope;
 
-        if (aggregators.containsKey(payloadType)){
-            Object newPayload = aggregators.get(payloadType).apply(envelope.getPayload(),envelope);
-            envelope.setPayload(newPayload);
+        if (envelope.getPayload() != null){
+            Class payloadType = envelope.getPayload().getClass();
+            // we perform an envelope aggregation if it is defined for certain payload type
+            if (envelopeAggr.containsKey(payloadType)){
+                output = envelopeAggr.get(payloadType).apply(envelope.getPayload(),envelope);
+            }
         }
 
-        return envelope;
+        return output;
     }
 
     private void routeBasicPayload(RoutedObjectEnvelope incomingEnvelope) {
         // sometimes we could want to aggregate the payload with envelope data
         // for example to add requestId for some purpose
-        RoutedObjectEnvelope envelope = postProcessPayload(incomingEnvelope);
+        //RoutedObjectEnvelope envelope = postProcessPayload(incomingEnvelope);
 
-        Class routingType = envelope.getPayload().getClass();
+        // sometimes we could need to restore original request id in outgoing envelope
+        // for example after some aggregation stage in business logic
+
+        // briefly speaking, we have a need to aggregate the envelope fields
+        // with request payload in several cases,
+        // so we perform an envelope aggregation if it is defined for certain payload type
+        RoutedObjectEnvelope finalEnvelope = envelopeAggregation(incomingEnvelope);
+
+        Class routingType = null;
+
+        if (finalEnvelope.getPayload() != null){
+            routingType = finalEnvelope.getPayload().getClass();
+        } else {
+            finalEnvelope.setPayload(
+                    new HashMap<String,String>() {{
+                        put("RqId",finalEnvelope.getRqId());
+                        put("CorrelId",finalEnvelope.getCorrelId());
+                        put("Error","null payload");
+                    }}
+            );
+            log.info(
+                        "[OBJECT ROUTER]: null payload in envelope RqId = "+finalEnvelope.getRqId()
+                        +" CorrelId = "+finalEnvelope.getCorrelId()
+            );
+        }
 
         List<Consumer> sinks = new ArrayList<>();
 
         List<String> receivers = null;
 
-
-        if (routingTable.containsKey(routingType)){
+        if (
+                routingType != null                  &&
+                routingTable.containsKey(routingType)
+        )
+        {
             receivers = routingTable.get(routingType);
             sinks.addAll(
                     receivers.stream()
@@ -265,16 +360,18 @@ public class IntlayerObjectRouter {
             // we did not find any receiver for the object among channel names,
             // so we return the object to the adapter which sent it here
             // finding a sink by envelope's request id
-            Consumer sinkById = sinkByRqIdProvider.apply(envelope.getRqId());
+            Consumer sinkById = sinkByRqIdProvider.apply(finalEnvelope.getRqId());
             if (sinkById != null){
                 // we unwrap the envelope because the receiver
                 // definitely knows the request id
-                sinkById.accept(envelope.getPayload());
+                sinkById.accept(finalEnvelope.getPayload());
+            } else {
+                log.info("[ROUTER]: drop the request "+ finalEnvelope.getRqId()+" - nowhere to route");
             }
         } else {
             // and finally we throw our envelope to all receivers found
             sinks.forEach(
-                    sink -> sink.accept(envelope)
+                    sink -> sink.accept(finalEnvelope)
             );
         }
     }
@@ -338,7 +435,17 @@ public class IntlayerObjectRouter {
     }
 
     private boolean isInternalSignalId(String rqId){
-        String prefix = rqId.substring(0,3);
+        String prefix = "";
+        if (rqId != null){
+            if (rqId.length() > 3) {
+                prefix = rqId.substring(0,3);
+            } else {
+                log.info("[ROUTER WARN]: received request with empty rqId");
+            }
+        } else {
+            log.info("[ROUTER WARN]: received request with rqId = null");
+        }
+
         return prefix.equals(">|<");
     }
 
@@ -350,11 +457,20 @@ public class IntlayerObjectRouter {
             if (!isInternalSignalId(rqId)){
                 log.info(String.format(logTemplate,rqId));
             }
+
+            RequestPriority priority = null;
+            if (requestIsPrioritised(rqId)){
+                priority = extractPriority(rqId);
+            }
+
+
             routeObjectSink().accept(
                     RoutedObjectEnvelope.builder()
-                            .rqId(rqId)
-                            .payload(payload)
-                            .build()
+                                            .rqId(rqId)
+                                            .correlId(rqId)
+                                            .priority(priority)
+                                            .payload(payload)
+                                        .build()
             );
         };
     }

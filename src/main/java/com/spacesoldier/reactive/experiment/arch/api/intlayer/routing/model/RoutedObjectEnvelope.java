@@ -7,5 +7,6 @@ import lombok.Data;
 public class RoutedObjectEnvelope {
     private String rqId;
     private String correlId; // for future one-to-many transformations and etc
+    private RequestPriority priority;
     private Object payload;
 }
