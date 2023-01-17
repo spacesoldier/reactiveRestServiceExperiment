@@ -21,6 +21,11 @@ public class ThirdFeatureServiceImpl implements ThirdFeatureService{
                 new ArrayList<String>(){{
                     add("beep");
                     add("boop");
+                    try {
+                        Thread.sleep(10000);
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
                     add("weeeeep");
                 }}
         ).doOnComplete(
@@ -56,6 +61,12 @@ public class ThirdFeatureServiceImpl implements ThirdFeatureService{
         testMono.subscribe(
                 test -> log.info(test)
         );
+
+        try {
+            Thread.sleep(5000);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
 
         return ThirdFeatureServiceResponse.builder()
                                                 .shnooops(request.getPathVar())

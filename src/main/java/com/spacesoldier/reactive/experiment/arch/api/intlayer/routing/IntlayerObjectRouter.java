@@ -158,24 +158,17 @@ public class IntlayerObjectRouter {
     );
     private final Scheduler monoPool = Schedulers.newSingle("mono outs");
 
-    private Function<Object,RoutedObjectEnvelope> envelopeObjectToRoute(String requestId){
+    private Function<Object,RoutedObjectEnvelope> envelopeObjectToRoute(
+            String requestId,
+            String correlId,
+            RequestPriority priority
+    ){
         return payload -> {
             //log.info("RqId: "+ requestId);
 
-            RequestPriority priority = null;
-            String rqId = requestId;
-
-            if (requestIsPrioritised(requestId)){
-                priority = extractPriority(requestId);
-                rqId = removePriorityFromRqId(requestId);
-            }
-            if (priority == null){
-                priority = RequestPriority.BACKGROUND;
-            }
-
             return RoutedObjectEnvelope.builder()
-                                            .rqId(rqId)
-                                            .correlId(requestId)
+                                            .rqId(requestId)
+                                            .correlId(correlId)
                                             .priority(priority)
                                             .payload(payload)
                                         .build();
@@ -211,7 +204,12 @@ public class IntlayerObjectRouter {
         return output;
     }
 
-    private void handlePublisherOutputs(String rqId, CorePublisher publisher){
+    private void handlePublisherOutputs(
+            String rqId,
+            String correlId,
+            RequestPriority priority,
+            CorePublisher publisher
+    ){
 
         Flux fluxPub = null;
         Mono monoPub = null;
@@ -237,7 +235,7 @@ public class IntlayerObjectRouter {
         if (fluxPub != null){
             fluxPub
                     .publishOn(fluxPool)
-                    .map(   envelopeObjectToRoute(rqId) )
+                    .map(   envelopeObjectToRoute(rqId, correlId, priority) )
                     .subscribe(
                             routeObjectSink(),
                             // when errors happen we won't lose them and route according to the plan
@@ -258,7 +256,7 @@ public class IntlayerObjectRouter {
             if (monoPub != null){
                 monoPub
                         .publishOn(monoPool)
-                        .map(   envelopeObjectToRoute(rqId) )
+                        .map(   envelopeObjectToRoute(rqId, correlId, priority) )
                         .subscribe(
                                 routeObjectSink(),
                                 error -> routeObjectSink().accept(
@@ -278,7 +276,12 @@ public class IntlayerObjectRouter {
 
         return envelope -> {
             if (envelope.getPayload() instanceof CorePublisher<?>){
-                handlePublisherOutputs(envelope.getRqId(), (CorePublisher) envelope.getPayload());
+                handlePublisherOutputs(
+                        envelope.getRqId(),
+                        envelope.getCorrelId(),
+                        envelope.getPriority(),
+                        (CorePublisher) envelope.getPayload()
+                );
             } else {
                 routeBasicPayload(envelope);
             }
@@ -320,8 +323,9 @@ public class IntlayerObjectRouter {
         } else {
             finalEnvelope.setPayload(
                     new HashMap<String,String>() {{
-                        put("RqId",finalEnvelope.getRqId());
-                        put("CorrelId",finalEnvelope.getCorrelId());
+                        put("RqId",     finalEnvelope.getRqId());
+                        put("CorrelId", finalEnvelope.getCorrelId());
+                        put("Priority", finalEnvelope.getPriority().str());
                         put("Error","null payload");
                     }}
             );
@@ -459,10 +463,15 @@ public class IntlayerObjectRouter {
             }
 
             RequestPriority priority = null;
+            String requestId = rqId;
+
             if (requestIsPrioritised(rqId)){
                 priority = extractPriority(rqId);
+                rqId = removePriorityFromRqId(rqId);
             }
-
+            if (priority == null){
+                priority = RequestPriority.BACKGROUND;
+            }
 
             routeObjectSink().accept(
                     RoutedObjectEnvelope.builder()

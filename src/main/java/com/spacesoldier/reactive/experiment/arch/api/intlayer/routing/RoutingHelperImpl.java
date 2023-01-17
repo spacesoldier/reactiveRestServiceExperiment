@@ -92,8 +92,10 @@ public class RoutingHelperImpl implements RoutingHelper{
         String output = requestId;
 
         if (requestIsPrioritised(requestId)){
-            String priorityDataStr = getPriorityString(requestId);
-            output = requestId.substring(priorityDataStr.length());
+            StringBuilder priorityDataStr = new StringBuilder(requestPriorityPrefix);
+            priorityDataStr.append(getPriorityString(requestId));
+            priorityDataStr.append(requestPrioritySuffix);
+            output = requestId.substring(priorityDataStr.toString().length());
         }
 
         return output;
