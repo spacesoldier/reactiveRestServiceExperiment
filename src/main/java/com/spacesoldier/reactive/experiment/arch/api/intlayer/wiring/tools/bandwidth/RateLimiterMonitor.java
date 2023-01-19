@@ -110,7 +110,7 @@ public class RateLimiterMonitor {
 
     private int maxParkedRequestCount = 0;
 
-    private void countParkedRequests(Integer parkedRqCount){
+    private int countParkedRequests(){
         int requestsQueuedCount = -1;
 
         if (queuedRequestsCount != null){
@@ -120,14 +120,18 @@ public class RateLimiterMonitor {
         if (requestsQueuedCount > maxParkedRequestCount){
             maxParkedRequestCount = requestsQueuedCount;
         }
+
+        return requestsQueuedCount;
     }
 
 
 
 
-    private String logPausesTemplate = "[RATE LIMITER]: %s pauses, max = %s ms, min = %s ms, avg = %s ms, median = %s ms";
-    private String logRequestsDoneTemplate = "[RATE LIMITER]: %s requests processed, avg wait = %s ms, median = %s ms";
-    private String logQueueTemplate = "[RATE LIMITER]: %s requests in queue, max queue length %s";
+    private final String logPausesTemplate = "[RATE LIMITER]: %s new pauses, %s pauses total, max = %s ms, min = %s ms, avg = %s ms, median = %s ms";
+    private final String logRequestsDoneTemplate = "[RATE LIMITER]: %s delayed requests processed, avg wait = %s ms, median = %s ms";
+    private final String logQueueTemplate = "[RATE LIMITER]: %s requests delayed in queue, max queue length %s";
+
+    private long oldPausesCount = 0;
 
     public void reportStatsPerMinute(){
 
@@ -143,9 +147,12 @@ public class RateLimiterMonitor {
             medianPause = pausesPerMinuteSorted.get(medianPos);
         }
 
+        long newPausesTotal = pauseCount - oldPausesCount;
+
         log.info(
                 String.format(
                         logPausesTemplate,
+                        newPausesTotal,
                         pauseCount,
                         maxPausePeriodMs,
                         minPausePeriodMs,
@@ -177,13 +184,7 @@ public class RateLimiterMonitor {
 
         requestsDurationsPerMinute.clear();
 
-
-        int queuedRequests = -1;
-
-        if (queuedRequestsCount != null){
-            queuedRequests = queuedRequestsCount.get();
-        }
-
+        int queuedRequests = countParkedRequests();
 
         log.info(
                 String.format(
