@@ -161,6 +161,7 @@ public class RateLimiterMonitor {
                 )
         );
 
+        oldPausesCount = newPausesTotal;
         pausesPerMinute.clear();
 
         long avgRqWaitMs = 0;

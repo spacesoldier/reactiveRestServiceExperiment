@@ -56,10 +56,10 @@ public class IntlayerObjectRouter {
             }
 
             return RoutedObjectEnvelope.builder()
-                        .rqId(envelope.getRqId())
-                        .correlId(envelope.getCorrelId())
-                        .priority(envelope.getPriority())
-                        .payload(result)
+                    .rqId(envelope.getRqId())
+                    .correlId(envelope.getCorrelId())
+                    .priority(envelope.getPriority())
+                    .payload(result)
                     .build();
         };
     }
@@ -111,9 +111,9 @@ public class IntlayerObjectRouter {
 
         String routableUnitNameTemplate = "%s-%s";
         String routeTypeName = typeToRoute != null  ?
-                                typeToRoute.getSimpleName()
-                                            .replaceAll("[aeiou]", "") :
-                                "object"                                               ;
+                typeToRoute.getSimpleName()
+                        .replaceAll("[aeiou]", "") :
+                "object"                                               ;
         String routableUnitName = String.format(
                 routableUnitNameTemplate,
                 routeTypeName,
@@ -124,10 +124,10 @@ public class IntlayerObjectRouter {
 
         routeRecord.add(
                 RoutingUnit.builder()
-                                .name(routableUnitName)
-                                .inputType(typeToRoute)
-                                .call(routeToFn)
-                            .build()
+                        .name(routableUnitName)
+                        .inputType(typeToRoute)
+                        .call(routeToFn)
+                        .build()
         );
     }
 
@@ -167,11 +167,11 @@ public class IntlayerObjectRouter {
             //log.info("RqId: "+ requestId);
 
             return RoutedObjectEnvelope.builder()
-                                            .rqId(requestId)
-                                            .correlId(correlId)
-                                            .priority(priority)
-                                            .payload(payload)
-                                        .build();
+                    .rqId(requestId)
+                    .correlId(correlId)
+                    .priority(priority)
+                    .payload(payload)
+                    .build();
         };
     }
 
@@ -242,10 +242,10 @@ public class IntlayerObjectRouter {
                             // until client outside receives a report
                             error -> routeObjectSink().accept(
                                     RoutedObjectEnvelope.builder()
-                                                                .rqId(rqId)
-                                                                .priority(RequestPriority.USER_LEVEL)
-                                                                .payload(error)
-                                                            .build()
+                                            .rqId(rqId)
+                                            .priority(RequestPriority.USER_LEVEL)
+                                            .payload(error)
+                                            .build()
                             ),
                             () -> {
                                 // let's perform an action when the publisher finishes the transmission
@@ -261,10 +261,10 @@ public class IntlayerObjectRouter {
                                 routeObjectSink(),
                                 error -> routeObjectSink().accept(
                                         RoutedObjectEnvelope.builder()
-                                                                .rqId(rqId)
-                                                                .priority(RequestPriority.USER_LEVEL)
-                                                                .payload(error)
-                                                            .build()
+                                                .rqId(rqId)
+                                                .priority(RequestPriority.USER_LEVEL)
+                                                .payload(error)
+                                                .build()
                                 )
                         );
             }
@@ -316,67 +316,76 @@ public class IntlayerObjectRouter {
         // so we perform an envelope aggregation if it is defined for certain payload type
         RoutedObjectEnvelope finalEnvelope = envelopeAggregation(incomingEnvelope);
 
-        Class routingType = null;
-
-        if (finalEnvelope.getPayload() != null){
-            routingType = finalEnvelope.getPayload().getClass();
+        if (finalEnvelope.getPayload() instanceof CorePublisher<?>){
+            handlePublisherOutputs(
+                    finalEnvelope.getRqId(),
+                    finalEnvelope.getCorrelId(),
+                    finalEnvelope.getPriority(),
+                    (CorePublisher) finalEnvelope.getPayload()
+            );
         } else {
-            finalEnvelope.setPayload(
-                    new HashMap<String,String>() {{
-                        put("RqId",     finalEnvelope.getRqId());
-                        put("CorrelId", finalEnvelope.getCorrelId());
-                        put("Priority", finalEnvelope.getPriority().str());
-                        put("Error","null payload");
-                    }}
-            );
-            log.info(
-                        "[OBJECT ROUTER]: null payload in envelope RqId = "+finalEnvelope.getRqId()
-                        +" CorrelId = "+finalEnvelope.getCorrelId()
-            );
-        }
+            Class routingType = null;
 
-        List<Consumer> sinks = new ArrayList<>();
-
-        List<String> receivers = null;
-
-        if (
-                routingType != null                  &&
-                routingTable.containsKey(routingType)
-        )
-        {
-            receivers = routingTable.get(routingType);
-            sinks.addAll(
-                    receivers.stream()
-                            .map(
-                                    receiverName -> {
-                                        Consumer sinkToRoute = sinkByChannelNameProvider.apply(receiverName);
-                                        return sinkToRoute;
-                                    }
-                            )
-                            .filter(sink -> sink != null)
-                            .toList()
-            );
-            //log.info("route");
-        }
-
-
-        if (sinks.size() == 0){
-            // we did not find any receiver for the object among channel names,
-            // so we return the object to the adapter which sent it here
-            // finding a sink by envelope's request id
-            Consumer sinkById = sinkByRqIdProvider.apply(finalEnvelope.getRqId());
-            if (sinkById != null){
-                // we unwrap the envelope because the receiver
-                // definitely knows the request id
-                sinkById.accept(finalEnvelope.getPayload());
+            if (finalEnvelope.getPayload() != null){
+                routingType = finalEnvelope.getPayload().getClass();
             } else {
-                log.info("[ROUTER]: drop the request "+ finalEnvelope.getRqId()+" - nowhere to route");
+                finalEnvelope.setPayload(
+                        new HashMap<String,String>() {{
+                            put("RqId",     finalEnvelope.getRqId());
+                            put("CorrelId", finalEnvelope.getCorrelId());
+                            put("Priority", finalEnvelope.getPriority().str());
+                            put("Error","null payload");
+                        }}
+                );
+                log.info(
+                        "[OBJECT ROUTER]: null payload in envelope RqId = "+finalEnvelope.getRqId()
+                                +" CorrelId = "+finalEnvelope.getCorrelId()
+                );
             }
-        } else {
-            // and finally we throw our envelope to all receivers found
-            sinks.forEach(
-                    sink -> sink.accept(finalEnvelope)
-            );
+
+            List<Consumer> sinks = new ArrayList<>();
+
+            List<String> receivers = null;
+
+            if (
+                    routingType != null                  &&
+                            routingTable.containsKey(routingType)
+            )
+            {
+                receivers = routingTable.get(routingType);
+                sinks.addAll(
+                        receivers.stream()
+                                .map(
+                                        receiverName -> {
+                                            Consumer sinkToRoute = sinkByChannelNameProvider.apply(receiverName);
+                                            return sinkToRoute;
+                                        }
+                                )
+                                .filter(sink -> sink != null)
+                                .toList()
+                );
+                //log.info("route");
+            }
+
+
+            if (sinks.size() == 0){
+                // we did not find any receiver for the object among channel names,
+                // so we return the object to the adapter which sent it here
+                // finding a sink by envelope's request id
+                Consumer sinkById = sinkByRqIdProvider.apply(finalEnvelope.getRqId());
+                if (sinkById != null){
+                    // we unwrap the envelope because the receiver
+                    // definitely knows the request id
+                    sinkById.accept(finalEnvelope.getPayload());
+                } else {
+                    log.info("[ROUTER]: drop the request "+ finalEnvelope.getRqId()+" - nowhere to route");
+                }
+            } else {
+                // and finally we throw our envelope to all receivers found
+                sinks.forEach(
+                        sink -> sink.accept(finalEnvelope)
+                );
+            }
         }
     }
 
@@ -438,7 +447,14 @@ public class IntlayerObjectRouter {
         }
     }
 
+    public static final String INTERNAL_REQUEST_MARKER = ">|<";
+
     private boolean isInternalSignalId(String rqId){
+
+        boolean result = false;
+
+        // try look at the beginning of the string
+        // in most cases it's enough
         String prefix = "";
         if (rqId != null){
             if (rqId.length() > 3) {
@@ -449,8 +465,17 @@ public class IntlayerObjectRouter {
         } else {
             log.info("[ROUTER WARN]: received request with rqId = null");
         }
+        result = prefix.equals(INTERNAL_REQUEST_MARKER);
 
-        return prefix.equals(">|<");
+        if (!result){
+            // look at the whole string
+            // in some cases there could be a priority prefix added to the beginning of the request id
+            if (rqId.contains(INTERNAL_REQUEST_MARKER)){
+                result = true;
+            }
+        }
+
+        return result;
     }
 
     public BiConsumer<String, Object> singleRequestsInput(){
@@ -475,13 +500,12 @@ public class IntlayerObjectRouter {
 
             routeObjectSink().accept(
                     RoutedObjectEnvelope.builder()
-                                            .rqId(rqId)
-                                            .correlId(rqId)
-                                            .priority(priority)
-                                            .payload(payload)
-                                        .build()
+                            .rqId(rqId)
+                            .correlId(rqId)
+                            .priority(priority)
+                            .payload(payload)
+                            .build()
             );
         };
     }
-
 }

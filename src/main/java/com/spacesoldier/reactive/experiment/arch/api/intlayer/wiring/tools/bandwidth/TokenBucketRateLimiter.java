@@ -1,6 +1,8 @@
 package com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.tools.bandwidth;
 
+import com.spacesoldier.reactive.experiment.arch.api.intlayer.routing.model.RequestPriority;
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.routing.model.RoutedObjectEnvelope;
+import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.tools.bandwidth.model.LimiterPassRequest;
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.tools.bandwidth.model.RouterBypassRequest;
 import lombok.Builder;
 import lombok.Getter;
@@ -10,10 +12,9 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.OffsetDateTime;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Stack;
-import java.util.UUID;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.function.*;
 import java.util.stream.IntStream;
 
@@ -24,9 +25,16 @@ public class TokenBucketRateLimiter {
 
     private int bucketCapacity = 450; // default value corresponds to 90% of connections Netty can initiate instantly
 
-    private Stack<String> tokenBucket = new Stack<>();
+//    private Stack<String> tokenBucket = new Stack<>();
 
-    private Stack<String> spentCoins = new Stack<>();
+    private Deque<String> tokenBucket = new ConcurrentLinkedDeque<>();
+
+//    private Stack<String> spentCoins = new Stack<>();
+
+//    private Deque<String> spentCoins = new ConcurrentLinkedDeque<>();
+
+    private Set<String> spentCoins = Collections.synchronizedSet(new HashSet<>());
+    private Map<String,String> billsInProcess = new ConcurrentHashMap<>();
 
     private BiConsumer<String,Object> requestSink;
 
@@ -44,12 +52,17 @@ public class TokenBucketRateLimiter {
     private Consumer<RouterBypassRequest> parkRequestSink;
     private Supplier<RouterBypassRequest> parkRequestSource;
 
+    Function<String, Boolean> requestPriorityDetector;
+    private BiFunction<String, RequestPriority,String> requestPrioritySetter;
+
     @Builder
     public TokenBucketRateLimiter(
             int bucketCapacity,
             BiConsumer<String, Object> requestSink,
             Consumer<RouterBypassRequest> parkRequestSink,
             Supplier<RouterBypassRequest> parkRequestSource,
+            Function<String, Boolean> requestPriorityDetector,
+            BiFunction<String, RequestPriority,String> requestPrioritySetter,
             String limiterName,
             Consumer<Object> reportOverloadStart,
             Consumer<Object> reportOverloadEnd
@@ -61,6 +74,8 @@ public class TokenBucketRateLimiter {
         // connect the external stuff to park queued requests
         this.parkRequestSink = parkRequestSink;
         this.parkRequestSource = parkRequestSource;
+        this.requestPriorityDetector = requestPriorityDetector;
+        this.requestPrioritySetter = requestPrioritySetter;
 
         // monitoring stuff
         this.reportOverloadStart = reportOverloadStart;
@@ -70,10 +85,38 @@ public class TokenBucketRateLimiter {
         // $$$$$        x_0
         IntStream.range(0,this.bucketCapacity).forEach(
                 num -> tokenBucket.push(
-                        //"coin"
+                        //"coin Id"
                         UUID.randomUUID().toString()
                 )
         );
+    }
+
+    public BiFunction<Object,RoutedObjectEnvelope,RoutedObjectEnvelope> executePassedRequest(){
+        return (requestObj, envelope) -> {
+            LimiterPassRequest requestEnvelope = null;
+            try {
+                requestEnvelope = (LimiterPassRequest) requestObj;
+            } catch (Exception e){
+                // for some reason we subscribed to some other type of objects
+            }
+
+            if (requestEnvelope != null){
+                String coinId = requestEnvelope.getCoinId();
+
+                Object runResult = null;
+
+                if (requestEnvelope.getTransmissionFn() != null){
+                    runResult = requestEnvelope.getTransmissionFn().apply(requestEnvelope.getPayload());
+                }
+
+                billsInProcess.put(coinId,envelope.getRqId());
+
+                Object output = tryReleaseToken(coinId).apply(runResult);
+
+                envelope.setPayload(output);
+            }
+            return envelope;
+        };
     }
 
     public BiFunction<Object,RoutedObjectEnvelope,RoutedObjectEnvelope> aggregateBypass(){
@@ -115,43 +158,95 @@ public class TokenBucketRateLimiter {
         }
     }
 
-    private synchronized void spendCoin(){
-        if (!tokenBucket.empty()){
+    private synchronized String spendCoin(){
+        String output = null;
+        if (!tokenBucket.isEmpty()){
             String coin = tokenBucket.pop();
-            spentCoins.push(coin);
+            spentCoins.add(coin);
 
             updateHistory(coin);
 
             if (reportOverloadEnd != null){
                 reportOverloadEnd.accept("");
             }
+
+            output = coin;
         } else {
             if (reportOverloadStart != null) {
                 reportOverloadStart.accept("");
             }
         }
+
+        return output;
     }
 
     private Function tryObtainToken (){
 
-        return envelope -> {
+        return inputObj -> {
             //log.info("[LIMITER]: try get token "+envelope.getClass().getSimpleName());
 
-            if (tokenBucket.empty()){
+            Object outputObj = null;
+
+            if (tokenBucket.isEmpty()){
                 //log.info("[LIMITER]: no coins left");
-                envelope = RouterBypassRequest.builder()
-                                                    .correlId(UUID.randomUUID().toString())
-                                                    .bypassStart(
-                                                            OffsetDateTime.now()
-                                                    )
-                                                    .payload(envelope)
-                                                .build();
+                if (!(inputObj instanceof RouterBypassRequest)){
+                    outputObj = wrapToBypassRequest(inputObj);
+                }
             } else {
-                spendCoin();
+                // this call is synchronized
+                String coinId = spendCoin();
+                if (coinId != null){
+                    if (!(inputObj instanceof LimiterPassRequest)){
+                        LimiterPassRequest passRequest = LimiterPassRequest.builder()
+                                                            .coinId(coinId)
+                                                        .build();
+                        if (inputObj instanceof RouterBypassRequest){
+                            RouterBypassRequest bypassRequest = (RouterBypassRequest) inputObj;
+                            passRequest.setPayload(bypassRequest.getPayload());
+                            passRequest.setTransmissionFn(bypassRequest.getDelayedCall());
+                        } else {
+                            passRequest.setPayload(inputObj);
+                        }
+                        outputObj = passRequest;
+                    }
+
+                } else {
+                    // the probability we can obtain no token still exist
+                    outputObj = wrapToBypassRequest(inputObj);
+                }
             }
 
-            return envelope;
+            return outputObj;
         };
+    }
+
+    private static RouterBypassRequest wrapToBypassRequest(Object inputObj) {
+
+        RouterBypassRequest bypassRequest = null;
+
+        if (inputObj instanceof RouterBypassRequest){
+            bypassRequest = (RouterBypassRequest) inputObj;
+        } else {
+            bypassRequest = RouterBypassRequest.builder()
+                                    .correlId(UUID.randomUUID().toString())
+                                    .bypassStart(
+                                            OffsetDateTime.now()
+                                    )
+                                    //.payload(payloadObj)
+                                .build();
+            if (inputObj instanceof LimiterPassRequest){
+                LimiterPassRequest passRq = (LimiterPassRequest) inputObj;
+                bypassRequest.setPayload(passRq.getPayload());
+                bypassRequest.setDelayedCall(passRq.getTransmissionFn());
+            } else {
+                bypassRequest.setPayload(inputObj);
+            }
+        }
+
+
+
+
+        return bypassRequest;
     }
 
     public void revokeParkedRequest(){
@@ -163,87 +258,105 @@ public class TokenBucketRateLimiter {
 
         if (queuedRequest != null){
             if (requestSink != null){
-                requestSink.accept(queuedRequest.getRequestId(), queuedRequest.getPayload());
+                String requestId = queuedRequest.getRequestId();
+
+                if (requestPrioritySetter != null){
+                    boolean requestAlreadyPrioritized = false;
+                    if (requestPriorityDetector != null){
+                        requestAlreadyPrioritized = requestPriorityDetector.apply(requestId);
+                    }
+                    if (!requestAlreadyPrioritized){
+                        requestId = requestPrioritySetter.apply(requestId,queuedRequest.getPriority());
+                    }
+                }
+
+                Object envelope = tryObtainToken().apply(queuedRequest);
+
+                requestSink.accept(requestId, envelope);
             }
         }
     }
 
+    private synchronized void returnCoin(String coinId){
 
+//        //tokenBucket.push("coin");
+//        if (!spentCoins.isEmpty()){
+//            String coin = spentCoins.pop();
+//            tokenBucket.push(coin);
+//        } else {
+//            tokenBucket.push(UUID.randomUUID().toString());
+//            log.info("[LIMITER]: emit new coin");
+//        }
 
-    private synchronized void returnCoin(){
-
-        //tokenBucket.push("coin");
-        if (!spentCoins.empty()){
-            String coin = spentCoins.pop();
-            tokenBucket.push(coin);
-        } else {
-            tokenBucket.push(UUID.randomUUID().toString());
-            log.info("[LIMITER]: emit new coin");
+        if (spentCoins.contains(coinId)){
+            tokenBucket.push(coinId);
+            spentCoins.remove(coinId);
         }
 
         revokeParkedRequest();
     }
 
-    private Function tryReleaseToken () {
+    private Function tryReleaseToken (String coinId) {
 
-        return envelope -> {
+        return inputObj -> {
 
             // let's check if input object is a result of request bypass knee action
-            if (envelope instanceof RouterBypassRequest){
+            if (inputObj instanceof RouterBypassRequest){
                 // there were no tokens to get, so bypass knee was used
                 // the request will be queued
             } else {
                 // the original function was activated,
                 // so we obtain its output here
                 // let's check the sort of the output object
-                if( envelope instanceof CorePublisher<?>) {
+                if( inputObj instanceof CorePublisher<?>) {
                     // some async action happen
                     // so the token will be disposed later
 
                     Flux fluxItem = null;
 
                     try {
-                        fluxItem = (Flux) envelope;
+                        fluxItem = (Flux) inputObj;
                     } catch (Exception e){}
 
                     if (fluxItem == null){
 
                         Mono monoItem = null;
                         try {
-                            monoItem = (Mono) envelope;
+                            monoItem = (Mono) inputObj;
                         } catch (Exception e){}
 
                         if (monoItem != null){
 
                             monoItem = monoItem.doFinally(
                                     signal -> {
-                                        returnCoin();
+                                        returnCoin(coinId);
                                     }
                             );
                             //log.info("[LIMITER]: item is Mono");
 
-                            envelope = monoItem;
+                            inputObj = monoItem;
                         }
 
                     } else {
                         //log.info("[LIMITER]: item is Flux");
                         fluxItem = fluxItem.doFinally(
                                 signal -> {
-                                    returnCoin();
+                                    returnCoin(coinId);
                                 }
                         );
 
-                        envelope = fluxItem;
+                        inputObj = fluxItem;
                     }
                 } else {
                     // no async actions detected,
                     // dispose the token now
-                    returnCoin();
+                    returnCoin(coinId);
+                    log.info("[LIMITER]: SYNC RETURN COIN");
                 }
 
             }
 
-            return envelope;
+            return inputObj;
         };
     }
 
@@ -255,14 +368,22 @@ public class TokenBucketRateLimiter {
         return transmissionFn ->
                     tryObtainToken()
                     .andThen(
-                                envelope -> {
+                                inputObj -> {
                                     Function output = transmissionFn;
-                                    if (envelope instanceof RouterBypassRequest){
+                                    if (inputObj instanceof RouterBypassRequest){
+                                        RouterBypassRequest bypassRequest = (RouterBypassRequest) inputObj;
+                                        bypassRequest.setDelayedCall(transmissionFn);
                                         output = bypassTransmissionKnee();
+                                    } else {
+                                        if (inputObj instanceof LimiterPassRequest){
+                                            LimiterPassRequest passEnvelope = (LimiterPassRequest) inputObj;
+                                            passEnvelope.setTransmissionFn(transmissionFn);
+                                            output = bypassTransmissionKnee();
+                                        }
                                     }
-                                    return output.apply(envelope);
+                                    return output.apply(inputObj);
                                 }
-                            )
-                    .andThen(   tryReleaseToken()  );
+                            );
+                    //.andThen(   tryReleaseToken()  );
     }
 }

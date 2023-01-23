@@ -1,9 +1,11 @@
 package com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.tools;
 
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.routing.IntlayerObjectRouter;
+import com.spacesoldier.reactive.experiment.arch.api.intlayer.routing.RoutingHelper;
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.routing.model.RequestPriority;
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters.WiringAdapter;
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.tools.bandwidth.TokenBucketRateLimiter;
+import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.tools.bandwidth.model.LimiterPassRequest;
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.tools.bandwidth.model.RouterBypassRequest;
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.tools.queue.QueueManager;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,6 +23,9 @@ public class BandwidthControllerConfig {
 
     @Autowired
     QueueManager queueManager;
+
+    @Autowired
+    RoutingHelper routingHelper;
 
     private String bandwidthGateName = "callGpAPI";
 
@@ -52,7 +57,18 @@ public class BandwidthControllerConfig {
                                         .parkRequestSource(
                                                     queueManager.queueOnDemand(bandwidthGateName).getItem()
                                         )
+                                        .requestPriorityDetector(
+                                                requestId -> routingHelper.requestIsPrioritised(requestId)
+                                        )
+                                        .requestPrioritySetter(
+                                                (rqId, priority) -> routingHelper.defineRequestPriority(rqId,priority)
+                                        )
                                     .build();
+
+        intlayerObjectRouter.addEnvelopeAggregation(
+                LimiterPassRequest.class,
+                rateLimiter.executePassedRequest()
+        );
 
         intlayerObjectRouter.addEnvelopeAggregation(
                 RouterBypassRequest.class,

@@ -77,6 +77,11 @@ public class WiringAdapter {
         if (featureActiveFlags.containsKey(typeToProcess)){
             // normally we obtain true
             isActive = featureActiveFlags.get(typeToProcess);
+        } else {
+            // we received unknown type
+            // which probably is processed not as a feature
+            // for example it could be Flux or Mono
+            isActive = true;
         }
 
         return isActive;
