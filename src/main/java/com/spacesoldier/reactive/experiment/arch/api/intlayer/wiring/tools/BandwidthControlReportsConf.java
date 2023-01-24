@@ -32,7 +32,7 @@ public class BandwidthControlReportsConf {
                         RateLimiterPauseReportRequest statusRq = (RateLimiterPauseReportRequest) inputObj;
                         rateLimiterMonitor.reportStatsPerMinute();
                     } catch (Exception e){
-                        log.info("[GP QUERY]: input is not a RateLimiterPauseReportRequest");
+                        log.info("[RATE LIMITER]: input is not a RateLimiterPauseReportRequest");
                     }
                     return "Ok";
                 }

@@ -1,14 +1,15 @@
 package com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.tools.bandwidth;
 
+import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.tools.bandwidth.model.RequestCallBill;
 import lombok.Builder;
 import lombok.extern.slf4j.Slf4j;
 
 import java.time.Duration;
 import java.time.OffsetDateTime;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -125,7 +126,88 @@ public class RateLimiterMonitor {
     }
 
 
+    private final Map<String, RequestCallBill> requestBills = new ConcurrentHashMap<>();
 
+    public BiFunction<String,String, String> requestCheckIn(){
+        return (rqId, coinId) ->{
+
+            RequestCallBill callBill = RequestCallBill.builder()
+                                                            .billId(UUID.randomUUID().toString())
+                                                            .requestId(rqId)
+                                                            .coinId(coinId)
+                                                            .requestStart(OffsetDateTime.now())
+                                                        .build();
+            if (!requestBills.containsKey(callBill.getBillId())){
+                requestBills.put(callBill.getBillId(), callBill);
+            } else {
+                log.info("[RATE LIMITER]: same bill received!");
+            }
+
+            return callBill.getBillId();
+        };
+    }
+
+    public Consumer<String> requestCheckOut(){
+        return billId -> {
+            if (requestBills.containsKey(billId)){
+                RequestCallBill closeBill = requestBills.get(billId);
+                closeBill.setRequestFinish(OffsetDateTime.now());
+            }
+//            RequestCallBill callBill = RequestCallBill.builder()
+//                                                            .billId(billId)
+//                                                            .coinId(coinId)
+//                                                        .build();
+//            if (requestBills.containsKey(coinId)){
+//                RequestCallBill existingBill = null;
+//                List<RequestCallBill> billsForCoin = requestBills.get(coinId);
+//                if (billsForCoin.contains(callBill)){
+//                    existingBill = billsForCoin.stream()
+//                                                    .filter(bill -> bill.equals(callBill))
+//                                                    .findAny()
+//                                                .orElse(null);
+//                }
+//                if (existingBill != null){
+//                    existingBill.setRequestFinish(OffsetDateTime.now());
+//                }
+//            }
+        };
+    }
+
+    private void calcBillStats(){
+//        List<List<RequestCallBill>> finishedBills = requestBills.values().stream()
+//                .map(
+//                        bills -> bills.stream()
+//                                .filter(bill -> bill.getRequestFinish() != null)
+//                                .collect(Collectors.toList())
+//                ).toList();
+
+        List<RequestCallBill> closedCallBills = requestBills.values()
+                                                                .stream()
+                                                                .filter(
+                                                                    bill -> bill.getRequestFinish() != null
+                                                                )
+                                                            .toList();
+
+        List<Duration> durations = closedCallBills.stream()
+                                                    .map(
+                                                        bill ->
+                                                                Duration.between(
+                                                                        bill.getRequestStart(),
+                                                                        bill.getRequestFinish()
+                                                                )
+                                                    )
+                                                .toList();
+
+        Long sumDuration = durations.stream()
+                                        .map(Duration::toMillis)
+                                        .reduce(Long::sum)
+                                    .orElse(0L);
+
+        double avgDuration = (double) (sumDuration / durations.size());
+
+        log.info("[RATE LIMITER]: average API call duration "+avgDuration+" ms");
+
+    }
 
     private final String logPausesTemplate = "[RATE LIMITER]: %s new pauses, %s pauses total, max = %s ms, min = %s ms, avg = %s ms, median = %s ms";
     private final String logRequestsDoneTemplate = "[RATE LIMITER]: %s delayed requests processed, avg wait = %s ms, median = %s ms";
@@ -194,6 +276,8 @@ public class RateLimiterMonitor {
                         maxParkedRequestCount
                 )
         );
+
+        calcBillStats();
     }
 
 }

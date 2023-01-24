@@ -37,6 +37,11 @@ public class BandwidthControllerMonitoringConf {
                 monitor.checkOverloadEnd()
         );
 
+        rateLimiter.connectTokenStatMonitoring(
+                monitor.requestCheckIn(),
+                monitor.requestCheckOut()
+        );
+
         queueManager.queueOnDemand(rateLimiter.getName())
                     .subscribeOnItemGet(
                         item -> {
