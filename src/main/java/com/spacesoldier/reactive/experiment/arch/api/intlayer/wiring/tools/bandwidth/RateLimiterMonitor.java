@@ -153,33 +153,10 @@ public class RateLimiterMonitor {
                 RequestCallBill closeBill = requestBills.get(billId);
                 closeBill.setRequestFinish(OffsetDateTime.now());
             }
-//            RequestCallBill callBill = RequestCallBill.builder()
-//                                                            .billId(billId)
-//                                                            .coinId(coinId)
-//                                                        .build();
-//            if (requestBills.containsKey(coinId)){
-//                RequestCallBill existingBill = null;
-//                List<RequestCallBill> billsForCoin = requestBills.get(coinId);
-//                if (billsForCoin.contains(callBill)){
-//                    existingBill = billsForCoin.stream()
-//                                                    .filter(bill -> bill.equals(callBill))
-//                                                    .findAny()
-//                                                .orElse(null);
-//                }
-//                if (existingBill != null){
-//                    existingBill.setRequestFinish(OffsetDateTime.now());
-//                }
-//            }
         };
     }
 
     private void calcBillStats(){
-//        List<List<RequestCallBill>> finishedBills = requestBills.values().stream()
-//                .map(
-//                        bills -> bills.stream()
-//                                .filter(bill -> bill.getRequestFinish() != null)
-//                                .collect(Collectors.toList())
-//                ).toList();
 
         List<RequestCallBill> closedCallBills = requestBills.values()
                                                                 .stream()
@@ -187,6 +164,8 @@ public class RateLimiterMonitor {
                                                                     bill -> bill.getRequestFinish() != null
                                                                 )
                                                             .toList();
+
+        List<String> closedBillIds = closedCallBills.stream().map(RequestCallBill::getBillId).toList();
 
         List<Duration> durations = closedCallBills.stream()
                                                     .map(
@@ -205,6 +184,12 @@ public class RateLimiterMonitor {
 
         double avgDuration = (double) (sumDuration / durations.size());
 
+        // clean billing history
+        closedBillIds.forEach(
+                billId -> requestBills.remove(billId)
+        );
+
+        log.info("[RATE LIMITER]: "+closedBillIds.size()+" calls processed");
         log.info("[RATE LIMITER]: average API call duration "+avgDuration+" ms");
 
     }
@@ -243,7 +228,7 @@ public class RateLimiterMonitor {
                 )
         );
 
-        oldPausesCount = newPausesTotal;
+        oldPausesCount = pauseCount;
         pausesPerMinute.clear();
 
         long avgRqWaitMs = 0;
