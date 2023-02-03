@@ -1,5 +1,6 @@
 package com.spacesoldier.reactive.experiment.arch.api.intlayer.routing;
 
+import com.spacesoldier.reactive.experiment.arch.api.intlayer.routing.model.EnvelopeKey;
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.routing.model.RequestPriority;
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.routing.model.RoutedObjectEnvelope;
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.routing.model.RoutingUnit;
@@ -35,9 +36,9 @@ public class IntlayerObjectRouter {
 
     private Function<String, Boolean> requestPriorityDetector;
     private Function<String, RequestPriority> requestPriorityExtractor;
-
     private Function<String, String> removePriorityFromRqId;
 
+    private Function<String, EnvelopeKey> envelopeKeyDecoder;
 
     @Setter
     private Runnable onRouterReadyAction;
@@ -73,6 +74,7 @@ public class IntlayerObjectRouter {
             Function<String, Boolean> requestPriorityDetector,
             Function<String, RequestPriority> requestPriorityExtractor,
             Function<String, String> removePriorityFromRqId,
+            Function<String, EnvelopeKey> envelopeKeyDecoder,
             Runnable onRouterReadyAction
     ){
         this.fluxProvider = fluxProvider;
@@ -83,6 +85,7 @@ public class IntlayerObjectRouter {
         this.requestPriorityDetector = requestPriorityDetector;
         this.requestPriorityExtractor = requestPriorityExtractor;
         this.removePriorityFromRqId = removePriorityFromRqId;
+        this.envelopeKeyDecoder = envelopeKeyDecoder;
     }
 
     private Map<Class,BiFunction<Object,RoutedObjectEnvelope,Object>> aggregators = new ConcurrentHashMap<>();
@@ -487,25 +490,41 @@ public class IntlayerObjectRouter {
                 log.info(String.format(logTemplate,rqId));
             }
 
+            EnvelopeKey envelopeKey = decodeEnvelopeKey(rqId);
+
+            routeObjectSink().accept(
+                    RoutedObjectEnvelope.builder()
+                                .rqId(envelopeKey.getRqId())
+                                .correlId(envelopeKey.getCorrelId())
+                                .priority(envelopeKey.getPriority())
+                                .payload(payload)
+                            .build()
+            );
+        };
+    }
+
+    private EnvelopeKey decodeEnvelopeKey(String rqId) {
+        EnvelopeKey envelopeKey = null;
+
+        if (envelopeKeyDecoder != null){
+            envelopeKey = envelopeKeyDecoder.apply(rqId);
+        } else {
             RequestPriority priority = null;
-            String requestId = rqId;
+
+            String rqIdClear = rqId;
 
             if (requestIsPrioritised(rqId)){
                 priority = extractPriority(rqId);
-                rqId = removePriorityFromRqId(rqId);
+                rqIdClear = removePriorityFromRqId(rqId);
             }
             if (priority == null){
                 priority = RequestPriority.BACKGROUND;
             }
 
-            routeObjectSink().accept(
-                    RoutedObjectEnvelope.builder()
-                            .rqId(rqId)
-                            .correlId(rqId)
-                            .priority(priority)
-                            .payload(payload)
-                            .build()
-            );
-        };
+            envelopeKey = new EnvelopeKey();
+            envelopeKey.setPriority(priority);
+            envelopeKey.setRqId(rqIdClear);
+        }
+        return envelopeKey;
     }
 }

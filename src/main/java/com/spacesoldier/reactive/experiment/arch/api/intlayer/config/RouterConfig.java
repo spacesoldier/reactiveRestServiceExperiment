@@ -31,6 +31,7 @@ public class RouterConfig {
                     .requestPriorityDetector    (   requestId -> routingHelper.requestIsPrioritised(requestId)       )
                     .requestPriorityExtractor   (   requestId -> routingHelper.parsePriorityForRequestID(requestId)  )
                     .removePriorityFromRqId     (   requestId -> routingHelper.removePriorityFromRequestID(requestId))
+                    .envelopeKeyDecoder         (   requestId -> routingHelper.decodeRequestParams(requestId)        )
                 .build();
     }
 

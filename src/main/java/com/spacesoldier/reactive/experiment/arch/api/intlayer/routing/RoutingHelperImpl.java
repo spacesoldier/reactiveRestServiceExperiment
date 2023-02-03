@@ -1,5 +1,6 @@
 package com.spacesoldier.reactive.experiment.arch.api.intlayer.routing;
 
+import com.spacesoldier.reactive.experiment.arch.api.intlayer.routing.model.EnvelopeKey;
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.routing.model.RequestPriority;
 import lombok.Builder;
 import lombok.extern.slf4j.Slf4j;
@@ -13,11 +14,11 @@ import java.util.regex.Pattern;
 @Slf4j
 public class RoutingHelperImpl implements RoutingHelper{
 
-    private String requestPriorityPrefix = "<[|";
-    private String requestPrioritySuffix = "|]>";
+    private final String requestPriorityPrefix = "<[|";
+    private final String requestPrioritySuffix = "|]>";
 
-    private String searchRegex = "<\\[\\|(.*?)\\|\\]>";
-    private Pattern searchPattern = Pattern.compile(searchRegex);
+    private final String searchRegex = "<\\[\\|(.*?)\\|\\]>";
+    private final Pattern searchPattern = Pattern.compile(searchRegex);
 
     @Builder
     private RoutingHelperImpl(){
@@ -28,10 +29,16 @@ public class RoutingHelperImpl implements RoutingHelper{
     public String defineRequestPriority(String requestId, RequestPriority priority) {
         StringBuilder output = new StringBuilder();
 
-        output.append(requestPriorityPrefix);
-        output.append(priority.str());
-        output.append(requestPrioritySuffix);
-        output.append(requestId);
+        if (priority != null){
+            output.append(requestPriorityPrefix);
+            output.append(priority.str());
+            output.append(requestPrioritySuffix);
+            output.append(requestId);
+        } else {
+            // probably set background priority here
+            output.append(requestId);
+        }
+
 
         return output.toString();
     }
@@ -46,8 +53,6 @@ public class RoutingHelperImpl implements RoutingHelper{
         RequestPriority output = RequestPriority.BACKGROUND;
 
         Integer priority = -1;
-
-
 
         if (requestIsPrioritised(requestId)){
             String priorityDataStr = getPriorityString(requestId);
@@ -101,4 +106,64 @@ public class RoutingHelperImpl implements RoutingHelper{
         return output;
     }
 
+    private final String correlIdSeparator = "||||";
+
+    @Override
+    public String encodeCorrelId(String requestStr, String correlId) {
+
+        StringBuilder outStr = new StringBuilder(requestStr);
+        if (correlId != null){
+            if (requestStr.contains(correlIdSeparator)){
+                int beginReplacement = outStr.indexOf(correlIdSeparator)+correlIdSeparator.length();
+                int endReplacement = outStr.length();
+                outStr.replace(beginReplacement,endReplacement,correlId);
+            } else {
+                outStr.append(correlIdSeparator)
+                        .append(correlId);
+            }
+        }
+
+        return outStr.toString();
+    }
+
+    @Override
+    public String encodeRequestKeyParams(String requestId, String correlId, RequestPriority priority) {
+        StringBuilder outStr = new StringBuilder(
+                                            defineRequestPriority(requestId,priority)
+                                    )
+                                            .append(correlIdSeparator)
+                                            .append(correlId);
+        return outStr.toString();
+    }
+
+    @Override
+    public EnvelopeKey decodeRequestParams(String envelopeKeyStr) {
+        EnvelopeKey envelopeKey = new EnvelopeKey();
+
+        boolean requestHasPriority = requestIsPrioritised(envelopeKeyStr);
+
+        if (requestHasPriority){
+            envelopeKey.setPriority(parsePriorityForRequestID(envelopeKeyStr));
+        }
+
+        if (envelopeKeyStr.contains(correlIdSeparator)){
+            String[] rqParts = envelopeKeyStr.split(correlIdSeparator);
+
+            if (requestHasPriority){
+                envelopeKey.setRqId(removePriorityFromRequestID(rqParts[0]));
+            } else {
+                envelopeKey.setRqId(rqParts[0]);
+            }
+
+            envelopeKey.setCorrelId(rqParts[1]);
+        } else {
+            if (requestHasPriority){
+                envelopeKey.setRqId(removePriorityFromRequestID(envelopeKeyStr));
+            } else {
+                envelopeKey.setRqId(envelopeKeyStr);
+            }
+        }
+
+        return envelopeKey;
+    }
 }

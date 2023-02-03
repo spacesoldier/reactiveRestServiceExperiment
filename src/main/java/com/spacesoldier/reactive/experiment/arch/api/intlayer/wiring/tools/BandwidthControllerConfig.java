@@ -63,6 +63,9 @@ public class BandwidthControllerConfig {
                                         .requestPrioritySetter(
                                                 (rqId, priority) -> routingHelper.defineRequestPriority(rqId,priority)
                                         )
+                                        .correlIdSetter(
+                                                (rqId,correlId) -> routingHelper.encodeCorrelId(rqId,correlId)
+                                        )
                                     .build();
 
         intlayerObjectRouter.addEnvelopeAggregation(

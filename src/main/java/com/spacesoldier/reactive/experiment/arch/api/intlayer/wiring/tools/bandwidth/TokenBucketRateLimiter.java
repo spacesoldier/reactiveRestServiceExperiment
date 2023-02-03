@@ -65,6 +65,7 @@ public class TokenBucketRateLimiter {
 
     Function<String, Boolean> requestPriorityDetector;
     private BiFunction<String, RequestPriority,String> requestPrioritySetter;
+    private BiFunction<String,String,String> correlIdSetter;
 
     @Builder
     public TokenBucketRateLimiter(
@@ -74,6 +75,7 @@ public class TokenBucketRateLimiter {
             Supplier<RouterBypassRequest> parkRequestSource,
             Function<String, Boolean> requestPriorityDetector,
             BiFunction<String, RequestPriority,String> requestPrioritySetter,
+            BiFunction<String,String,String> correlIdSetter,
             String limiterName,
             Consumer<Object> reportOverloadStart,
             Consumer<Object> reportOverloadEnd
@@ -87,6 +89,7 @@ public class TokenBucketRateLimiter {
         this.parkRequestSource = parkRequestSource;
         this.requestPriorityDetector = requestPriorityDetector;
         this.requestPrioritySetter = requestPrioritySetter;
+        this.correlIdSetter = correlIdSetter;
 
         // monitoring stuff
         this.reportOverloadStart = reportOverloadStart;
@@ -245,11 +248,9 @@ public class TokenBucketRateLimiter {
             bypassRequest = (RouterBypassRequest) inputObj;
         } else {
             bypassRequest = RouterBypassRequest.builder()
-                                    //.correlId(UUID.randomUUID().toString())
                                     .bypassStart(
                                             OffsetDateTime.now()
                                     )
-                                    //.payload(payloadObj)
                                 .build();
             if (inputObj instanceof LimiterPassRequest){
                 LimiterPassRequest passRq = (LimiterPassRequest) inputObj;
@@ -283,6 +284,9 @@ public class TokenBucketRateLimiter {
                         requestId = requestPrioritySetter.apply(requestId,queuedRequest.getPriority());
                     }
                 }
+                if (correlIdSetter != null){
+                    requestId = correlIdSetter.apply(requestId,queuedRequest.getCorrelId());
+                }
 
                 Object envelope = tryObtainToken().apply(queuedRequest);
 
@@ -292,15 +296,6 @@ public class TokenBucketRateLimiter {
     }
 
     private synchronized void returnCoin(String coinId){
-
-//        //tokenBucket.push("coin");
-//        if (!spentCoins.isEmpty()){
-//            String coin = spentCoins.pop();
-//            tokenBucket.push(coin);
-//        } else {
-//            tokenBucket.push(UUID.randomUUID().toString());
-//            log.info("[LIMITER]: emit new coin");
-//        }
 
         if (spentCoins.contains(coinId)){
             tokenBucket.push(coinId);
@@ -405,6 +400,5 @@ public class TokenBucketRateLimiter {
                                     return output.apply(inputObj);
                                 }
                             );
-                    //.andThen(   tryReleaseToken()  );
     }
 }
