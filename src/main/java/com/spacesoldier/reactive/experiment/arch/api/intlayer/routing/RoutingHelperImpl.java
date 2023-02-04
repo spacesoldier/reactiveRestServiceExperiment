@@ -107,6 +107,7 @@ public class RoutingHelperImpl implements RoutingHelper{
     }
 
     private final String correlIdSeparator = "||||";
+    private final String correlIdSeparatorRegex = "(\\|\\|\\|\\|)";
 
     @Override
     public String encodeCorrelId(String requestStr, String correlId) {
@@ -147,7 +148,7 @@ public class RoutingHelperImpl implements RoutingHelper{
         }
 
         if (envelopeKeyStr.contains(correlIdSeparator)){
-            String[] rqParts = envelopeKeyStr.split(correlIdSeparator);
+            String[] rqParts = envelopeKeyStr.split(correlIdSeparatorRegex);
 
             if (requestHasPriority){
                 envelopeKey.setRqId(removePriorityFromRequestID(rqParts[0]));
