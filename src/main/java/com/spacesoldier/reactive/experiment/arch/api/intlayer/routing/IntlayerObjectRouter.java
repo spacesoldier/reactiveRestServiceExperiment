@@ -168,13 +168,27 @@ public class IntlayerObjectRouter {
     ){
         return payload -> {
             //log.info("RqId: "+ requestId);
+            RoutedObjectEnvelope output = null;
 
-            return RoutedObjectEnvelope.builder()
-                    .rqId(requestId)
-                    .correlId(correlId)
-                    .priority(priority)
-                    .payload(payload)
-                    .build();
+            if (payload instanceof RoutedObjectEnvelope){
+                // here we possibly override request id and correlation id
+                // TODO: need to investigate this case further
+                output = (RoutedObjectEnvelope) payload;
+
+                // do not lose correlation id if payload does not have it
+                if (((RoutedObjectEnvelope) payload).getCorrelId() == null){
+                    ((RoutedObjectEnvelope) payload).setCorrelId(correlId);
+                }
+            } else {
+                output = RoutedObjectEnvelope.builder()
+                                                    .rqId(requestId)
+                                                    .correlId(correlId)
+                                                    .priority(priority)
+                                                    .payload(payload)
+                                                .build();
+            }
+
+            return output;
         };
     }
 
