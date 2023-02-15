@@ -36,7 +36,7 @@ public class WiringAdapter {
         this.routableFunctionSink = routableFunctionSink;
     }
 
-    Map<Class,Boolean> featureActiveFlags = new HashMap<>();
+    Map<Class,Boolean> featureActiveFlags = Collections.synchronizedMap(new ConcurrentHashMap<>());
 
     public void registerFeature(
             Class inputType,
@@ -48,7 +48,7 @@ public class WiringAdapter {
         }
     }
 
-    Map<Class, Set<String>> requestProcessDependencies = new HashMap<>();
+    Map<Class, Set<String>> requestProcessDependencies = Collections.synchronizedMap(new HashMap<>());
 
     public boolean typeProcessHasDependencies(Class typeToProcess){
         return requestProcessDependencies.containsKey(typeToProcess);
@@ -74,15 +74,13 @@ public class WiringAdapter {
     public boolean featureIsActive(Class typeToProcess){
         boolean isActive = false;
 
-        if (featureActiveFlags.containsKey(typeToProcess)){
-            // normally we obtain true
-            isActive = featureActiveFlags.get(typeToProcess);
-        } else {
-            // we received unknown type
-            // which probably is processed not as a feature
-            // for example it could be Flux or Mono
-            isActive = true;
-        }
+        // normally we obtain the value from flags map,
+        // but in case we received unknown type
+        // which probably is processed not as a feature
+        // for example it could be Flux or Mono,
+        // we will return true, because such types are handled internally in Router
+        // (or it will handle errors by itself)
+        isActive = featureActiveFlags.getOrDefault(typeToProcess, true);
 
         return isActive;
     }
@@ -103,17 +101,17 @@ public class WiringAdapter {
 
     // here is a map with the dependency requirements for each init action
     // the action could be invoked only when all dependencies are met
-    Map<String, Set<String>> actionDependencies = new HashMap<>();
+    Map<String, Set<String>> actionDependencies = Collections.synchronizedMap(new ConcurrentHashMap<>());
 
     // here are the list of actions in progress
-    Set<String> actionsInProgress = new HashSet<>();
+    Set<String> actionsInProgress = Collections.synchronizedSet(new HashSet<>());
 
     // here are the actions which had been completed
     // to match with dependency requirements of other init actions
-    Set<String> actionsComplete = new HashSet<>();
+    Set<String> actionsComplete = Collections.synchronizedSet(new HashSet<>());
 
     // here are the list of actions awaiting the requirements to be satisfied
-    Set<String> actionsWaitList = new HashSet<>();
+    Set<String> actionsWaitList = Collections.synchronizedSet(new HashSet<>());
 
     private boolean actionHasDependencies(String actionName){
         return actionDependencies.containsKey(actionName);
@@ -140,8 +138,8 @@ public class WiringAdapter {
         );
     }
 
-    private Map<String, Object> pausedRequests = new ConcurrentHashMap<>();
-    private Map<Class,List<String>> pausedRequestsIndex = new ConcurrentHashMap<>();
+    private Map<String, Object> pausedRequests = Collections.synchronizedMap(new ConcurrentHashMap<>());
+    private Map<Class,List<String>> pausedRequestsIndex = Collections.synchronizedMap(new ConcurrentHashMap<>());
 
     private void addRequestToIndex(Class rqType, String rqId){
         if (!pausedRequestsIndex.containsKey(rqType)){
@@ -281,7 +279,7 @@ public class WiringAdapter {
         }
     }
 
-    public Map<String, Supplier> initActions = new HashMap<>();
+    public Map<String, Supplier> initActions = Collections.synchronizedMap(new HashMap<>());
 
     public void registerInitAction(
             String actionName,
