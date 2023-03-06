@@ -28,12 +28,21 @@ public class BandwidthControlReportsConf {
         wiringAdapter.registerFeature(
                 RateLimiterPauseReportRequest.class,
                 inputObj -> {
+                    RateLimiterPauseReportRequest statusRq = null;
                     try{
-                        RateLimiterPauseReportRequest statusRq = (RateLimiterPauseReportRequest) inputObj;
-                        rateLimiterMonitor.reportStatsPerMinute();
+                        statusRq = (RateLimiterPauseReportRequest) inputObj;
                     } catch (Exception e){
                         log.info("[RATE LIMITER]: input is not a RateLimiterPauseReportRequest");
                     }
+
+                    if (statusRq != null){
+                        try {
+                            rateLimiterMonitor.reportStatsPerMinute();
+                        } catch (Exception e){
+                            log.info("[RATE LIMITER]: error while reporting status - "+ e.getMessage());
+                        }
+                    }
+
                     return "Ok";
                 }
         );
