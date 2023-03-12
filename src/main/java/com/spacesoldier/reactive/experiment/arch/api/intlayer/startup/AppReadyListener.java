@@ -1,6 +1,8 @@
 package com.spacesoldier.reactive.experiment.arch.api.intlayer.startup;
 
+import com.spacesoldier.reactive.experiment.arch.api.intlayer.api.AppInitActionDefinition;
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.routing.IntlayerObjectRouter;
+import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters.WiringAdapter;
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters.kafka.ReactorKafkaAdapter;
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters.rest.outgoing.ApiClientAdapter;
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters.rest.outgoing.model.adapter.ExternalResourceCallDefinition;
@@ -14,6 +16,16 @@ public class AppReadyListener implements ApplicationListener<ApplicationReadyEve
     @Override
     public void onApplicationEvent(ApplicationReadyEvent event) {
         ConfigurableApplicationContext context = event.getApplicationContext();
+
+        Map<String, AppInitActionDefinition> appInitActions = context.getBeansOfType(AppInitActionDefinition.class);
+
+        if (!appInitActions.isEmpty()){
+            WiringAdapter wiringAdapter = context.getBean(WiringAdapter.class);
+
+            appInitActions.forEach(
+                    (key, value) -> wiringAdapter.registerInitAction(value)
+            );
+        }
 
         Map<String, ExternalResourceCallDefinition> externalResourceCallDefs = context.getBeansOfType(ExternalResourceCallDefinition.class);
 

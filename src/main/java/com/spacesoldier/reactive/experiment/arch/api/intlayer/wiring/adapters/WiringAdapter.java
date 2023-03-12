@@ -1,5 +1,6 @@
 package com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters;
 
+import com.spacesoldier.reactive.experiment.arch.api.intlayer.api.AppInitActionDefinition;
 import lombok.Builder;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
@@ -66,8 +67,10 @@ public class WiringAdapter {
 
     public void activateFeature(Class typeToProcess){
         if (featureActiveFlags.containsKey(typeToProcess)){
-            featureActiveFlags.put(typeToProcess,Boolean.TRUE);
-            log.info("[WIRING]: processing the "+typeToProcess.getSimpleName()+" activated");
+            if (! featureActiveFlags.get(typeToProcess).equals(Boolean.TRUE)){
+                featureActiveFlags.put(typeToProcess,Boolean.TRUE);
+                log.info("[WIRING]: processing the "+typeToProcess.getSimpleName()+" activated");
+            }
         }
     }
 
@@ -103,6 +106,10 @@ public class WiringAdapter {
     // the action could be invoked only when all dependencies are met
     Map<String, Set<String>> actionDependencies = Collections.synchronizedMap(new ConcurrentHashMap<>());
 
+    // an action can take time, so we need to be able to receive an event when it completes
+    // we store the class as an event object type which must be sent after the init action completion
+    Map<String,Class> actionCompleteSignalTypes = Collections.synchronizedMap(new ConcurrentHashMap<>());
+
     // here are the list of actions in progress
     Set<String> actionsInProgress = Collections.synchronizedSet(new HashSet<>());
 
@@ -126,6 +133,10 @@ public class WiringAdapter {
         }
 
         return result;
+    }
+
+    private boolean actionWaitsCompletedSignal(String actionName){
+        return actionCompleteSignalTypes.containsKey(actionName);
     }
 
     private boolean isActionInProgress(String actionName){
@@ -204,6 +215,35 @@ public class WiringAdapter {
 
     private final Scheduler monoPool = Schedulers.newSingle("init_thread");
 
+    private void performInitActionCompletion(String actionName){
+        // remove action from wait list
+        stopWaiting(actionName);
+        // remove action from in progress list
+        progressCompleted(actionName);
+        // remember completed action name
+        actionsComplete.add(actionName);
+        log.info("[INIT]: initialize action "+actionName+" completed");
+
+        // now we can perform some waiting init actions
+        invokeWaitingActions();
+
+        // and perform any paused requests which may depend on
+        // and were paused until required services are ready to run
+        revokePausedRequests(actionName);
+
+        // check and activate features
+        // when no paused requests obtained during init stage
+        activateFeaturesByDependencies();
+    }
+
+    private void checkActionCompleted(String actionName){
+        if (!actionWaitsCompletedSignal(actionName)){
+            performInitActionCompletion(actionName);
+        } else {
+            log.info("[INIT]: wait for "+actionName+" to complete");
+        }
+    }
+
     private void invokeInitAction(
             String actionName,
             Supplier initAction
@@ -230,26 +270,7 @@ public class WiringAdapter {
                                 // and brain shocking consequences
                                 .publishOn(monoPool)
                                 .subscribe(
-                                        result -> {
-                                            // remove action from wait list
-                                            stopWaiting(actionName);
-                                            // remove action from in progress list
-                                            progressCompleted(actionName);
-                                            // remember completed action name
-                                            actionsComplete.add(actionName);
-                                            log.info("[INIT]: initialize action "+actionName+" completed");
-
-                                            // now we can perform some waiting init actions
-                                            invokeWaitingActions();
-
-                                            // and perform any paused requests which may depend on
-                                            // and were paused until required services are ready to run
-                                            revokePausedRequests(actionName);
-
-                                            // check and activate features
-                                            // when no paused requests obtained during init stage
-                                            activateFeaturesByDependencies();
-                                        },
+                                        result -> checkActionCompleted(actionName),
                                         error -> {
                                             log.info("[INIT FAIL]: initialize action "+actionName+" failed due to error "+error.getClass());
                                         }
@@ -281,7 +302,7 @@ public class WiringAdapter {
 
     public Map<String, Supplier> initActions = Collections.synchronizedMap(new HashMap<>());
 
-    public void registerInitAction(
+    private void registerInitAction(
             String actionName,
             Supplier initAction
     ){
@@ -289,16 +310,49 @@ public class WiringAdapter {
         initActions.put(actionName,initAction);
     }
 
-    public void registerInitAction(
+    private void registerInitAction(
             String actionName,
             Supplier initAction,
             Set<String> dependsOn
     ){
         if (!actionHasDependencies(actionName)){
-            actionDependencies.put(actionName,dependsOn);
+            if (dependsOn != null){
+                actionDependencies.put(actionName,dependsOn);
+            }
         }
-        log.info("[WIRING]: register init action \"" + actionName + "\"");
-        initActions.put(actionName,initAction);
+        registerInitAction(actionName,initAction);
+    }
+
+    private void registerInitAction(
+            String actionName,
+            Supplier initAction,
+            Class actionCompleteSignalType,
+            Set<String> dependsOn
+    ){
+        if (!actionCompleteSignalTypes.containsKey(actionName)){
+            if (actionCompleteSignalType != null){
+                actionCompleteSignalTypes.put(actionName,actionCompleteSignalType);
+                registerFeature(
+                        actionCompleteSignalType,
+                        actionCompletedSignalObj -> {
+                            performInitActionCompletion(actionName);
+                            return "Ok";
+                        }
+                );
+            }
+        } else {
+            log.info("[WIRING]: WARN - possible init action duplication - " + actionName);
+        }
+        registerInitAction(actionName,initAction,dependsOn);
+    }
+
+    public void registerInitAction(AppInitActionDefinition initActionDef){
+        this.registerInitAction(
+                initActionDef.getInitActionName(),
+                initActionDef.getInitAction(),
+                initActionDef.getActionCompleteSignalType(),
+                initActionDef.getDependsOn()
+        );
     }
 
     public boolean isAllActionRequirementsCouldBeMet(){

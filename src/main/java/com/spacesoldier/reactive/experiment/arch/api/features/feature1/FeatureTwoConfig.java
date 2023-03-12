@@ -2,6 +2,7 @@ package com.spacesoldier.reactive.experiment.arch.api.features.feature1;
 
 import com.spacesoldier.reactive.experiment.arch.api.features.feature0.FirstFeatureService;
 import com.spacesoldier.reactive.experiment.arch.api.features.feature1.model.FeatureTwoRequest;
+import com.spacesoldier.reactive.experiment.arch.api.intlayer.api.AppInitActionDefinition;
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters.WiringAdapter;
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.adapters.rest.incoming.EndpointAdapter;
 import lombok.extern.slf4j.Slf4j;
@@ -25,24 +26,32 @@ public class FeatureTwoConfig {
     SecondFeatureService secondFeatureService;
 
     @Bean
+    public AppInitActionDefinition featureTwoInit(){
+        return AppInitActionDefinition.builder()
+                .initActionName(
+                        SecondFeatureService.FEATURE_TWO_SRV_READY
+                )
+                .initAction(
+                        () -> {
+                            try {
+                                Thread.sleep(20000);
+                            } catch (InterruptedException e) {
+                                log.info("[FEATURE 2]: wtf is happened here");
+                            }
+                            return "[FEATURE 2]: Hey hey hey feature two init sequence message to anyone who interested";
+                        }
+                )
+                .dependsOn(
+                        new HashSet<>(){{ add(FirstFeatureService.FEATURE_ONE_READY); }}
+                )
+                .build();
+    }
+    @Bean
     public void configureFeatureTwo(){
 
         endpointAdapter.registerRequestBuilder(
                 FeatureTwoRequest.class,
                 SecondFeatureService.transformRequest()
-        );
-
-        wiringAdapter.registerInitAction(
-                SecondFeatureService.FEATURE_TWO_SRV_READY,
-                () -> {
-                    try {
-                        Thread.sleep(20000);
-                    } catch (InterruptedException e) {
-                        log.info("[FEATURE 2]: wtf is happened here");
-                    }
-                    return "[FEATURE 2]: Hey hey hey feature two init sequence message to anyone who interested";
-                },
-                new HashSet<>(){{ add(FirstFeatureService.FEATURE_ONE_READY); }}
         );
 
         wiringAdapter.registerFeature(
