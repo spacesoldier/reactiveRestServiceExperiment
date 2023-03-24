@@ -19,7 +19,7 @@ public class RoundRobinPriorityQueue implements RequestsQueue {
     private String queueNamePrefix = "roundRobin";
 
     private final Map<Class, RequestsQueue> queuesToWrite = Collections.synchronizedMap(new HashMap<>());
-    private final Deque<RequestsQueue> queuesToRead = new ConcurrentLinkedDeque();
+    private final Deque<RequestsQueue> queuesToRead = new ConcurrentLinkedDeque<>();
 
     private Function<String, RequestsQueue> requestQueueSource;
 

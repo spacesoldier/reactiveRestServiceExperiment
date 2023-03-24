@@ -49,9 +49,6 @@ public class BandwidthControllerConfig {
 
     @Bean
     public TokenBucketRateLimiter initTokenBucketBandwidthControl(){
-
-        String beep = "boop";
-
         TokenBucketRateLimiter rateLimiter =
                 TokenBucketRateLimiter.builder()
                                         .limiterName(bandwidthGateName)
