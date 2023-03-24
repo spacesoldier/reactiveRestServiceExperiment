@@ -3,7 +3,7 @@ package com.spacesoldier.reactive.experiment.arch.api.intlayer.routing.model;
 import java.util.HashMap;
 import java.util.Map;
 
-public enum RequestPriority {
+public enum RequestPriority{
     USER_LEVEL(0),                  // absolute top priority to speed up processing of user-level objects
     REGULAR_LEVEL(1),               // allows to use objects in real priority queues
     BACKGROUND(Integer.MAX_VALUE);  // absolute low priority for internal background processing
@@ -55,7 +55,11 @@ public enum RequestPriority {
         return output;
     }
 
-    public Integer priority;
+    private Integer priority;
+
+    public Integer getPriority(){
+        return priority;
+    }
 
     private static final Map<Integer,String> naming = new HashMap<>(){{
         put(0, "user level");
@@ -120,6 +124,5 @@ public enum RequestPriority {
 
         return output;
     }
-
 
 }

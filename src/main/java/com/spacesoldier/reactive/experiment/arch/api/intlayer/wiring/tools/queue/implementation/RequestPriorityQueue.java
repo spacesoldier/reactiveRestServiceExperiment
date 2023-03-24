@@ -1,6 +1,8 @@
-package com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.tools.queue;
+package com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.tools.queue.implementation;
 
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.routing.model.RequestPriority;
+import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.tools.bandwidth.model.RouterBypassRequest;
+import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.tools.queue.RequestsQueue;
 import lombok.Builder;
 import lombok.extern.slf4j.Slf4j;
 
@@ -10,28 +12,26 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 @Slf4j
-public class PriorityQueueImpl implements RequestsQueue {
+public class RequestPriorityQueue implements RequestsQueue {
 
-    private Map<RequestPriority, Queue> queues = new HashMap<>(){
+    private final Map<RequestPriority, Queue<RouterBypassRequest>> queues = new HashMap<>(){
         {
-            put(    RequestPriority.BACKGROUND, new ConcurrentLinkedQueue());   // for low-priority items
+            put(    RequestPriority.BACKGROUND, new ConcurrentLinkedQueue<>());   // for low-priority items
             put(
-                    RequestPriority.REGULAR_LEVEL,                              // variable priority items
-                    new PriorityQueue<Comparable>(
-                            (o1, o2) -> o1.compareTo(o2)
-                    )
+                    RequestPriority.REGULAR_LEVEL,                                // variable priority items
+                    new PriorityQueue<>()
             );
-            put(    RequestPriority.USER_LEVEL, new ConcurrentLinkedQueue());   // for highest priority items
+            put(    RequestPriority.USER_LEVEL, new ConcurrentLinkedQueue<>());   // for highest priority items
         }
     };
 
-    private String queueName;
+    private final String queueName;
 
     @Builder
-    private PriorityQueueImpl(
+    private RequestPriorityQueue(
             String queueName,
-            Consumer onItemPut,
-            Consumer onItemGet
+            Consumer<RouterBypassRequest> onItemPut,
+            Consumer<RouterBypassRequest> onItemGet
 
     ){
         this.queueName = queueName;
@@ -39,32 +39,32 @@ public class PriorityQueueImpl implements RequestsQueue {
         this.onItemGet = onItemGet;
     }
 
-    String errorMsgTemplate = "[QUEUE ERROR]: null element provided to queue %s with %s priority";
+    String errorMsgTemplate = "[QUEUE ERROR]: null element provided to queue %s";
 
-    Consumer onItemPut;
-    Consumer onItemGet;
+    Consumer<RouterBypassRequest> onItemPut;
+    Consumer<RouterBypassRequest> onItemGet;
 
     @Override
-    public Consumer putItem(RequestPriority priority) {
-        return item -> {
-            if (item != null){
+    public Consumer<RouterBypassRequest> putItem() {
+        return request -> {
+            if (request != null){
+                RequestPriority priority = request.getPriority();
                 Queue queueToPut = queues.get(priority);
 
                 if (queueToPut != null){
-                    queueToPut.add(item);
+                    queueToPut.add(request);
                 } else {
                     log.info("[QUEUE WARN]: putting an item to unknown queue: "+priority.str());
                 }
 
                 if (onItemPut != null){
-                    onItemPut.accept(item);
+                    onItemPut.accept(request);
                 }
             } else {
                 log.info(
                         String.format(
                                 errorMsgTemplate,
-                                queueName,
-                                priority.description()
+                                queueName
                         )
                 );
             }
@@ -72,10 +72,10 @@ public class PriorityQueueImpl implements RequestsQueue {
     }
 
     @Override
-    public Supplier getItem() {
+    public Supplier<RouterBypassRequest> getItem() {
 
         return () -> {
-            Object queuedItem = null;
+            RouterBypassRequest queuedItem = null;
 
             // try to get a high priority queued item
             queuedItem = queues.get(RequestPriority.USER_LEVEL).poll();
@@ -111,12 +111,12 @@ public class PriorityQueueImpl implements RequestsQueue {
     }
 
     @Override
-    public void subscribeOnItemPut(Consumer onItemPut) {
+    public void subscribeOnItemPut(Consumer<RouterBypassRequest> onItemPut) {
         this.onItemPut = onItemPut;
     }
 
     @Override
-    public void subscribeOnItemGet(Consumer onItemGet) {
+    public void subscribeOnItemGet(Consumer<RouterBypassRequest> onItemGet) {
         this.onItemGet = onItemGet;
     }
 }

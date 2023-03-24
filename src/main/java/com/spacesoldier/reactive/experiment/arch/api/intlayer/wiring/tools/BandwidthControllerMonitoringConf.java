@@ -5,6 +5,7 @@ import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.tools.bandw
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.tools.bandwidth.TokenBucketRateLimiter;
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.tools.bandwidth.model.RouterBypassRequest;
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.tools.queue.QueueManager;
+import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.tools.queue.RequestsQueue;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
@@ -15,8 +16,9 @@ import java.time.OffsetDateTime;
 @Component
 @Slf4j
 public class BandwidthControllerMonitoringConf {
+
     @Autowired
-    QueueManager queueManager;
+    RequestsQueue requestsQueue;
 
     @Autowired
     TokenBucketRateLimiter rateLimiter;
@@ -26,12 +28,9 @@ public class BandwidthControllerMonitoringConf {
 
         RateLimiterMonitor monitor = RateLimiterMonitor.builder()
                                                             .queuedRequestsCount(
-                                                                    queueManager.queueOnDemand(
-                                                                                    rateLimiter.getName()
-                                                                                )
-                                                                                .queueSize()
+                                                                    requestsQueue.queueSize()
                                                             )
-                                                            .build();
+                                                        .build();
         rateLimiter.connectOverloadMonitoring(
                 monitor.setOverloadStart(),
                 monitor.checkOverloadEnd()
@@ -42,28 +41,24 @@ public class BandwidthControllerMonitoringConf {
                 monitor.requestCheckOut()
         );
 
-        queueManager.queueOnDemand(rateLimiter.getName())
+        requestsQueue
                     .subscribeOnItemGet(
-                        item -> {
-                            RouterBypassRequest request = null;
-                            if (item instanceof RouterBypassRequest){
-                                request = (RouterBypassRequest) item;
-                            }
+                            request -> {
 
-                            if (request != null){
+                                if (request != null){
 
-                                if (request.getPriority() == RequestPriority.USER_LEVEL){
-                                    log.info("[RATE LIMITER]: revoke USER request "+request.getRequestId());
+                                    if (request.getPriority() == RequestPriority.USER_LEVEL){
+                                        log.info("[RATE LIMITER]: revoke USER request "+request.getRequestId());
+                                    }
+
+                                    request.setBypassEnd(OffsetDateTime.now());
+
+                                    monitor.requestDurationMeterSink().accept(
+                                            request.getBypassStart(),
+                                            request.getBypassEnd()
+                                    );
                                 }
-
-                                request.setBypassEnd(OffsetDateTime.now());
-
-                                monitor.requestDurationMeterSink().accept(
-                                        request.getBypassStart(),
-                                        request.getBypassEnd()
-                                );
                             }
-                        }
                     );
 
         return monitor;

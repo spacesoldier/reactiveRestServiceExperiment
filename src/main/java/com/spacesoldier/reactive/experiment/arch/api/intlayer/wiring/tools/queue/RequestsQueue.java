@@ -1,19 +1,17 @@
 package com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.tools.queue;
 
 
-import com.spacesoldier.reactive.experiment.arch.api.intlayer.routing.model.RequestPriority;
+import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.tools.bandwidth.model.RouterBypassRequest;
 
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 public interface RequestsQueue {
-    Consumer putItem(
-            RequestPriority priority
-    );
-    Supplier getItem();
+    Consumer<RouterBypassRequest> putItem();
+    Supplier<RouterBypassRequest> getItem();
 
     Supplier<Integer> queueSize();
 
-    void subscribeOnItemPut(Consumer onItemPut);
-    void subscribeOnItemGet(Consumer onItemGet);
+    void subscribeOnItemPut(Consumer<RouterBypassRequest> onItemPut);
+    void subscribeOnItemGet(Consumer<RouterBypassRequest> onItemGet);
 }
