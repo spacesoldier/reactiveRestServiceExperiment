@@ -160,11 +160,18 @@ public class RateLimiterMonitor {
     private void calcBillStats(){
 
         List<RequestCallBill> closedCallBills = requestBills.values()
-                .stream()
-                .filter(
-                        bill -> bill.getRequestFinish() != null
-                )
-                .toList();
+                                                                .stream()
+                                                                .filter(
+                                                                        bill -> bill.getRequestFinish() != null
+                                                                )
+                                                                .toList();
+
+        List<RequestCallBill> openCallBills = requestBills.values()
+                                                                .stream()
+                                                                .filter(
+                                                                        bill -> bill.getRequestFinish() == null
+                                                                )
+                                                                .toList();
 
         List<String> closedBillIds = closedCallBills.stream().map(RequestCallBill::getBillId).toList();
         log.info("[RATE LIMITER]: "+closedBillIds.size()+" calls processed");
@@ -203,7 +210,7 @@ public class RateLimiterMonitor {
             );
 
             if (pauseStarted != null){
-                log.info("[RATE LIMITER]: OVERLOAD");
+                log.info("[RATE LIMITER]: OVERLOAD "+openCallBills.size()+"calls in process");
             }
             log.info("[RATE LIMITER]: average API call duration "+avgDuration+" ms");
             log.info("[RATE LIMITER]: median API call duration "+medianDuration+" ms");
