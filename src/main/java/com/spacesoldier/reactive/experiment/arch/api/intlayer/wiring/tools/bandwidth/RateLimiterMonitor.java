@@ -216,6 +216,10 @@ public class RateLimiterMonitor {
                 log.info("[RATE LIMITER]: OVERLOAD");
             }
 
+            if (closedCallBills.size() == 0){
+                log.info("[RATE LIMITER]: STUCK with "+openCallBills.size()+" requests in process");
+            }
+
             if (
                     bandwidth > 0
                  && openCallBills.size() == bandwidth
