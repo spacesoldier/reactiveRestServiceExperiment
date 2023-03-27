@@ -187,10 +187,6 @@ public class TokenBucketRateLimiter {
             }
 
             output = coin;
-        } else {
-            if (reportOverloadStart != null) {
-                reportOverloadStart.accept("");
-            }
         }
 
         return output;
@@ -209,14 +205,18 @@ public class TokenBucketRateLimiter {
                 if (!(inputObj instanceof RouterBypassRequest)){
                     outputObj = wrapToBypassRequest(inputObj);
                 }
+
+                if (reportOverloadStart != null) {
+                    reportOverloadStart.accept("");
+                }
             } else {
                 // this call is synchronized
                 String coinId = spendCoin();
                 if (coinId != null){
                     if (!(inputObj instanceof LimiterPassRequest)){
                         LimiterPassRequest passRequest = LimiterPassRequest.builder()
-                                .coinId(coinId)
-                                .build();
+                                                            .coinId(coinId)
+                                                        .build();
                         if (inputObj instanceof RouterBypassRequest){
                             RouterBypassRequest bypassRequest = (RouterBypassRequest) inputObj;
                             passRequest.setPayload(bypassRequest.getPayload());
@@ -245,10 +245,10 @@ public class TokenBucketRateLimiter {
             bypassRequest = (RouterBypassRequest) inputObj;
         } else {
             bypassRequest = RouterBypassRequest.builder()
-                    .bypassStart(
-                            OffsetDateTime.now()
-                    )
-                    .build();
+                                    .bypassStart(
+                                            OffsetDateTime.now()
+                                    )
+                                .build();
             if (inputObj instanceof LimiterPassRequest){
                 LimiterPassRequest passRq = (LimiterPassRequest) inputObj;
                 bypassRequest.setPayload(passRq.getPayload());
@@ -379,8 +379,8 @@ public class TokenBucketRateLimiter {
     public Function<Function, Function> takeControlOverTransmission() {
 
         return transmissionFn ->
-                tryObtainToken()
-                        .andThen(
+                    tryObtainToken()
+                    .andThen(
                                 inputObj -> {
                                     Function output = transmissionFn;
                                     if (inputObj instanceof RouterBypassRequest){
@@ -396,6 +396,6 @@ public class TokenBucketRateLimiter {
                                     }
                                     return output.apply(inputObj);
                                 }
-                        );
+                            );
     }
 }

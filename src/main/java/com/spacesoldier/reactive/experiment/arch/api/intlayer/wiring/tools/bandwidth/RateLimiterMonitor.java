@@ -12,7 +12,6 @@ import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 @Slf4j
 public class RateLimiterMonitor {
@@ -102,11 +101,11 @@ public class RateLimiterMonitor {
             OffsetDateTime requestProceed
     ) {
         requestsDurationsPerMinute.add(
-                                        Duration.between(
-                                                        requestQueuedStart,
-                                                        requestProceed
-                                                )
-                                        .toMillis()
+                Duration.between(
+                                requestQueuedStart,
+                                requestProceed
+                        )
+                        .toMillis()
         );
     }
 
@@ -137,11 +136,11 @@ public class RateLimiterMonitor {
         return (rqId, coinId) ->{
 
             RequestCallBill callBill = RequestCallBill.builder()
-                    .billId(UUID.randomUUID().toString())
-                    .requestId(rqId)
-                    .coinId(coinId)
-                    .requestStart(OffsetDateTime.now())
-                    .build();
+                                                            .billId(UUID.randomUUID().toString())
+                                                            .requestId(rqId)
+                                                            .coinId(coinId)
+                                                            .requestStart(OffsetDateTime.now())
+                                                        .build();
             if (!requestBills.containsKey(callBill.getBillId())){
                 requestBills.put(callBill.getBillId(), callBill);
             } else {
@@ -164,18 +163,18 @@ public class RateLimiterMonitor {
     private void calcBillStats(){
 
         List<RequestCallBill> closedCallBills = requestBills.values()
-                .stream()
-                .filter(
-                        bill -> bill.getRequestFinish() != null
-                )
-                .toList();
+                                                                .stream()
+                                                                .filter(
+                                                                    bill -> bill.getRequestFinish() != null
+                                                                )
+                                                            .toList();
 
         List<RequestCallBill> openCallBills = requestBills.values()
-                .stream()
-                .filter(
-                        bill -> bill.getRequestFinish() == null
-                )
-                .toList();
+                                                                .stream()
+                                                                .filter(
+                                                                        bill -> bill.getRequestFinish() == null
+                                                                )
+                                                            .toList();
 
         List<String> closedBillIds = closedCallBills.stream().map(RequestCallBill::getBillId).toList();
         log.info("[RATE LIMITER]: "+closedBillIds.size()+" calls processed");
@@ -200,9 +199,9 @@ public class RateLimiterMonitor {
             }
 
             Long sumDuration = durations.stream()
-                                            .map(Duration::toMillis)
-                                            .reduce(Long::sum)
-                                            .orElse(0L);
+                    .map(Duration::toMillis)
+                    .reduce(Long::sum)
+                    .orElse(0L);
 
             double avgDuration = durations.isEmpty() ?
                     0.0                                         :
@@ -213,11 +212,15 @@ public class RateLimiterMonitor {
                     requestBills::remove
             );
 
+            if (pauseStarted != null){
+                log.info("[RATE LIMITER]: OVERLOAD");
+            }
+
             if (
                     bandwidth > 0
-                            && openCallBills.size() == bandwidth
+                 && openCallBills.size() == bandwidth
             ){
-                log.info("[RATE LIMITER]: OVERLOAD "+openCallBills.size()+"calls in process");
+                log.info("[RATE LIMITER]: FULL THROTTLE "+openCallBills.size()+"calls in process");
             }
 
             log.info("[RATE LIMITER]: average API call duration "+avgDuration+" ms");
@@ -241,11 +244,11 @@ public class RateLimiterMonitor {
             List<Long> pausesPerMinuteSorted = pausesPerMinute.stream().sorted().toList();
 
             avgPauseMs =    pausesPerMinuteSorted.isEmpty()         ?
-                    0   :
-                    pausesPerMinuteSorted
-                            .stream()
-                            .reduce(0L, Long::sum)
-                            / pausesPerMinuteSorted.size();
+                                                                0   :
+                            pausesPerMinuteSorted
+                                        .stream()
+                                        .reduce(0L, Long::sum)
+                                    / pausesPerMinuteSorted.size();
 
             int medianPos = pausesPerMinuteSorted.size()/2;
             medianPause = pausesPerMinuteSorted.get(medianPos);
@@ -274,13 +277,13 @@ public class RateLimiterMonitor {
         if (requestsDurationsPerMinute.size() > 0){
             List<Long> rqWaitSorted = requestsDurationsPerMinute.stream().sorted().toList();
             avgRqWaitMs =   rqWaitSorted.isEmpty()              ?
-                                        0   :
-                                        rqWaitSorted
-                                                .stream()
-                                                .reduce(0L, Long::sum)
-                                                / rqWaitSorted.size();
-                                int medianPos = rqWaitSorted.size() / 2;
-                                medianRqWaitMs = rqWaitSorted.get(medianPos);
+                                                            0   :
+                            rqWaitSorted
+                                    .stream()
+                                    .reduce(0L, Long::sum)
+                                    / rqWaitSorted.size();
+            int medianPos = rqWaitSorted.size() / 2;
+            medianRqWaitMs = rqWaitSorted.get(medianPos);
         }
 
         log.info(
