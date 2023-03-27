@@ -23,6 +23,7 @@ public class TokenBucketRateLimiter {
     @Getter
     private String name;
 
+    @Getter
     private int bucketCapacity = 450; // default value corresponds to 90% of connections Netty can initiate instantly
 
     private Deque<String> tokenBucket = new ConcurrentLinkedDeque<>();

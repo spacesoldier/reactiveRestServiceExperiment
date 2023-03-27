@@ -22,6 +22,8 @@ public class RateLimiterMonitor {
     // we catch these moments and analyze them
     // ------------------------------------------------------------------
     private final List<Long> pausesPerMinute = Collections.synchronizedList(new ArrayList<>());
+
+    private int bandwidth = -1;
     OffsetDateTime pauseStarted = null;
     long minPausePeriodMs = 0;
     long maxPausePeriodMs = 0;
@@ -32,9 +34,11 @@ public class RateLimiterMonitor {
 
     @Builder
     private RateLimiterMonitor(
-            Supplier<Integer> queuedRequestsCount
+            Supplier<Integer> queuedRequestsCount,
+            int bandwidth
     ){
         this.queuedRequestsCount = queuedRequestsCount;
+        this.bandwidth = bandwidth;
     }
 
     private void updatePauseMeasurement() {
@@ -98,11 +102,11 @@ public class RateLimiterMonitor {
             OffsetDateTime requestProceed
     ) {
         requestsDurationsPerMinute.add(
-                Duration.between(
-                                requestQueuedStart,
-                                requestProceed
-                        )
-                        .toMillis()
+                                        Duration.between(
+                                                        requestQueuedStart,
+                                                        requestProceed
+                                                )
+                                        .toMillis()
         );
     }
 
@@ -160,18 +164,18 @@ public class RateLimiterMonitor {
     private void calcBillStats(){
 
         List<RequestCallBill> closedCallBills = requestBills.values()
-                                                                .stream()
-                                                                .filter(
-                                                                        bill -> bill.getRequestFinish() != null
-                                                                )
-                                                                .toList();
+                .stream()
+                .filter(
+                        bill -> bill.getRequestFinish() != null
+                )
+                .toList();
 
         List<RequestCallBill> openCallBills = requestBills.values()
-                                                                .stream()
-                                                                .filter(
-                                                                        bill -> bill.getRequestFinish() == null
-                                                                )
-                                                                .toList();
+                .stream()
+                .filter(
+                        bill -> bill.getRequestFinish() == null
+                )
+                .toList();
 
         List<String> closedBillIds = closedCallBills.stream().map(RequestCallBill::getBillId).toList();
         log.info("[RATE LIMITER]: "+closedBillIds.size()+" calls processed");
@@ -196,9 +200,9 @@ public class RateLimiterMonitor {
             }
 
             Long sumDuration = durations.stream()
-                    .map(Duration::toMillis)
-                    .reduce(Long::sum)
-                    .orElse(0L);
+                                            .map(Duration::toMillis)
+                                            .reduce(Long::sum)
+                                            .orElse(0L);
 
             double avgDuration = durations.isEmpty() ?
                     0.0                                         :
@@ -209,9 +213,13 @@ public class RateLimiterMonitor {
                     requestBills::remove
             );
 
-            if (pauseStarted != null){
+            if (
+                    bandwidth > 0
+                            && openCallBills.size() == bandwidth
+            ){
                 log.info("[RATE LIMITER]: OVERLOAD "+openCallBills.size()+"calls in process");
             }
+
             log.info("[RATE LIMITER]: average API call duration "+avgDuration+" ms");
             log.info("[RATE LIMITER]: median API call duration "+medianDuration+" ms");
         }
@@ -266,13 +274,13 @@ public class RateLimiterMonitor {
         if (requestsDurationsPerMinute.size() > 0){
             List<Long> rqWaitSorted = requestsDurationsPerMinute.stream().sorted().toList();
             avgRqWaitMs =   rqWaitSorted.isEmpty()              ?
-                    0   :
-                    rqWaitSorted
-                            .stream()
-                            .reduce(0L, Long::sum)
-                            / rqWaitSorted.size();
-            int medianPos = rqWaitSorted.size() / 2;
-            medianRqWaitMs = rqWaitSorted.get(medianPos);
+                                        0   :
+                                        rqWaitSorted
+                                                .stream()
+                                                .reduce(0L, Long::sum)
+                                                / rqWaitSorted.size();
+                                int medianPos = rqWaitSorted.size() / 2;
+                                medianRqWaitMs = rqWaitSorted.get(medianPos);
         }
 
         log.info(
