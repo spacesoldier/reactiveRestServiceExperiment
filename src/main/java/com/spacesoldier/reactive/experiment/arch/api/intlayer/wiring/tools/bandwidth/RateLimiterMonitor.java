@@ -177,7 +177,8 @@ public class RateLimiterMonitor {
                                                             .toList();
 
         List<String> closedBillIds = closedCallBills.stream().map(RequestCallBill::getBillId).toList();
-        log.info("[RATE LIMITER]: "+closedBillIds.size()+" calls processed");
+        int callCompletedCount = closedBillIds.size();
+        log.info("[RATE LIMITER]: "+callCompletedCount+" calls processed");
 
         if (!closedBillIds.isEmpty()){
             List<Duration> durations = closedCallBills.stream()
@@ -199,9 +200,9 @@ public class RateLimiterMonitor {
             }
 
             Long sumDuration = durations.stream()
-                    .map(Duration::toMillis)
-                    .reduce(Long::sum)
-                    .orElse(0L);
+                                            .map(Duration::toMillis)
+                                            .reduce(Long::sum)
+                                            .orElse(0L);
 
             double avgDuration = durations.isEmpty() ?
                     0.0                                         :
@@ -216,9 +217,7 @@ public class RateLimiterMonitor {
                 log.info("[RATE LIMITER]: OVERLOAD");
             }
 
-            if (closedCallBills.size() == 0){
-                log.info("[RATE LIMITER]: STUCK with "+openCallBills.size()+" requests in process");
-            }
+            log.info("[RATE LIMITER]: "+openCallBills.size()+" requests in process");
 
             if (
                     bandwidth > 0
