@@ -202,6 +202,9 @@ public class RateLimiterMonitor {
                     requestBills::remove
             );
 
+            if (pauseStarted != null){
+                log.info("[RATE LIMITER]: OVERLOAD");
+            }
             log.info("[RATE LIMITER]: average API call duration "+avgDuration+" ms");
             log.info("[RATE LIMITER]: median API call duration "+medianDuration+" ms");
         }

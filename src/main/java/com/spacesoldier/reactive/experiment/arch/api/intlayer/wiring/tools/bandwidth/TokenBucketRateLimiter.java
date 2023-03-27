@@ -25,13 +25,7 @@ public class TokenBucketRateLimiter {
 
     private int bucketCapacity = 450; // default value corresponds to 90% of connections Netty can initiate instantly
 
-//    private Stack<String> tokenBucket = new Stack<>();
-
     private Deque<String> tokenBucket = new ConcurrentLinkedDeque<>();
-
-//    private Stack<String> spentCoins = new Stack<>();
-
-//    private Deque<String> spentCoins = new ConcurrentLinkedDeque<>();
 
     private Set<String> spentCoins = Collections.synchronizedSet(new HashSet<>());
     private Map<String, String> billsInProcess = new ConcurrentHashMap<>();
@@ -107,6 +101,7 @@ public class TokenBucketRateLimiter {
 
     public BiFunction<Object,RoutedObjectEnvelope,RoutedObjectEnvelope> executePassedRequest(){
         return (requestObj, envelope) -> {
+
             LimiterPassRequest requestEnvelope = null;
             try {
                 requestEnvelope = (LimiterPassRequest) requestObj;
@@ -207,6 +202,7 @@ public class TokenBucketRateLimiter {
 
             Object outputObj = null;
 
+            // TODO: put here a function which decides to allow the processing of the request
             if (tokenBucket.isEmpty()){
                 //log.info("[LIMITER]: no coins left");
                 if (!(inputObj instanceof RouterBypassRequest)){
@@ -218,8 +214,8 @@ public class TokenBucketRateLimiter {
                 if (coinId != null){
                     if (!(inputObj instanceof LimiterPassRequest)){
                         LimiterPassRequest passRequest = LimiterPassRequest.builder()
-                                                            .coinId(coinId)
-                                                        .build();
+                                .coinId(coinId)
+                                .build();
                         if (inputObj instanceof RouterBypassRequest){
                             RouterBypassRequest bypassRequest = (RouterBypassRequest) inputObj;
                             passRequest.setPayload(bypassRequest.getPayload());
@@ -248,10 +244,10 @@ public class TokenBucketRateLimiter {
             bypassRequest = (RouterBypassRequest) inputObj;
         } else {
             bypassRequest = RouterBypassRequest.builder()
-                                    .bypassStart(
-                                            OffsetDateTime.now()
-                                    )
-                                .build();
+                    .bypassStart(
+                            OffsetDateTime.now()
+                    )
+                    .build();
             if (inputObj instanceof LimiterPassRequest){
                 LimiterPassRequest passRq = (LimiterPassRequest) inputObj;
                 bypassRequest.setPayload(passRq.getPayload());
@@ -382,8 +378,8 @@ public class TokenBucketRateLimiter {
     public Function<Function, Function> takeControlOverTransmission() {
 
         return transmissionFn ->
-                    tryObtainToken()
-                    .andThen(
+                tryObtainToken()
+                        .andThen(
                                 inputObj -> {
                                     Function output = transmissionFn;
                                     if (inputObj instanceof RouterBypassRequest){
@@ -399,6 +395,6 @@ public class TokenBucketRateLimiter {
                                     }
                                     return output.apply(inputObj);
                                 }
-                            );
+                        );
     }
 }
