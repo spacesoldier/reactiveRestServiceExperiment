@@ -37,7 +37,7 @@ public class WiringAdapter {
         this.routableFunctionSink = routableFunctionSink;
     }
 
-    Map<Class,Boolean> featureActiveFlags = Collections.synchronizedMap(new ConcurrentHashMap<>());
+    Map<Class,Boolean> featureActiveFlags = new ConcurrentHashMap<>();
 
     public void registerFeature(
             Class inputType,
@@ -49,7 +49,7 @@ public class WiringAdapter {
         }
     }
 
-    Map<Class, Set<String>> requestProcessDependencies = Collections.synchronizedMap(new HashMap<>());
+    Map<Class, Set<String>> requestProcessDependencies = new ConcurrentHashMap<>();
 
     public boolean typeProcessHasDependencies(Class typeToProcess){
         return requestProcessDependencies.containsKey(typeToProcess);
@@ -104,21 +104,21 @@ public class WiringAdapter {
 
     // here is a map with the dependency requirements for each init action
     // the action could be invoked only when all dependencies are met
-    Map<String, Set<String>> actionDependencies = Collections.synchronizedMap(new ConcurrentHashMap<>());
+    Map<String, Set<String>> actionDependencies = new ConcurrentHashMap<>();
 
     // an action can take time, so we need to be able to receive an event when it completes
     // we store the class as an event object type which must be sent after the init action completion
-    Map<String,Class> actionCompleteSignalTypes = Collections.synchronizedMap(new ConcurrentHashMap<>());
+    Map<String,Class> actionCompleteSignalTypes = new ConcurrentHashMap<>();
 
     // here are the list of actions in progress
-    Set<String> actionsInProgress = Collections.synchronizedSet(new HashSet<>());
+    Set<String> actionsInProgress = ConcurrentHashMap.newKeySet();
 
     // here are the actions which had been completed
     // to match with dependency requirements of other init actions
-    Set<String> actionsComplete = Collections.synchronizedSet(new HashSet<>());
+    Set<String> actionsComplete = ConcurrentHashMap.newKeySet();
 
     // here are the list of actions awaiting the requirements to be satisfied
-    Set<String> actionsWaitList = Collections.synchronizedSet(new HashSet<>());
+    Set<String> actionsWaitList = ConcurrentHashMap.newKeySet();
 
     private boolean actionHasDependencies(String actionName){
         return actionDependencies.containsKey(actionName);
@@ -149,8 +149,8 @@ public class WiringAdapter {
         );
     }
 
-    private Map<String, Object> pausedRequests = Collections.synchronizedMap(new ConcurrentHashMap<>());
-    private Map<Class,List<String>> pausedRequestsIndex = Collections.synchronizedMap(new ConcurrentHashMap<>());
+    private Map<String, Object> pausedRequests = new ConcurrentHashMap<>();
+    private Map<Class,List<String>> pausedRequestsIndex = new ConcurrentHashMap<>();
 
     private void addRequestToIndex(Class rqType, String rqId){
         if (!pausedRequestsIndex.containsKey(rqType)){
@@ -300,7 +300,7 @@ public class WiringAdapter {
         }
     }
 
-    public Map<String, Supplier> initActions = Collections.synchronizedMap(new HashMap<>());
+    public Map<String, Supplier> initActions = new ConcurrentHashMap<>();
 
     private void registerInitAction(
             String actionName,

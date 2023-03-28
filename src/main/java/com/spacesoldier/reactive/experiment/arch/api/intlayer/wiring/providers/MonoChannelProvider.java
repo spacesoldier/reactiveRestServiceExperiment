@@ -9,6 +9,7 @@ import reactor.core.publisher.Mono;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
 // some sort of dynamic storage for wires
@@ -20,7 +21,7 @@ public class MonoChannelProvider {
     private MonoChannelProvider(){
 
     }
-    private Map<String, MonoChannel> requestWires = Collections.synchronizedMap(new HashMap<>());
+    private Map<String, MonoChannel> requestWires = new ConcurrentHashMap<>();
 
     private final String unitName = "mono wiring manager";
     private final Logger logger = LoggerFactory.getLogger(unitName);

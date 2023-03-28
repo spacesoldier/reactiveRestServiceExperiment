@@ -8,6 +8,7 @@ import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
@@ -20,7 +21,7 @@ public class RateLimiterMonitor {
     // so it could not proceed any new requests
     // we catch these moments and analyze them
     // ------------------------------------------------------------------
-    private final List<Long> pausesPerMinute = Collections.synchronizedList(new ArrayList<>());
+    private final Deque<Long> pausesPerMinute = new ConcurrentLinkedDeque<>();
 
     private int bandwidth = -1;
     OffsetDateTime pauseStarted = null;
@@ -94,7 +95,7 @@ public class RateLimiterMonitor {
     // here we monitor the waiting time for queued requests
     // ------------------------------------------------------------------
 
-    private final List<Long> requestsDurationsPerMinute = Collections.synchronizedList(new ArrayList<>());
+    private final Deque<Long> requestsDurationsPerMinute = new ConcurrentLinkedDeque<>();
 
     private void saveRequestDuration(
             OffsetDateTime requestQueuedStart,

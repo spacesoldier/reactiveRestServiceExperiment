@@ -9,6 +9,7 @@ import reactor.core.publisher.Flux;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
 // some sort of dynamic storage for wires
@@ -19,7 +20,7 @@ public class FluxChannelProvider {
     private FluxChannelProvider(){
 
     }
-    private Map<String, FluxChannel> requestStreams = Collections.synchronizedMap(new HashMap<>());
+    private Map<String, FluxChannel> requestStreams = new ConcurrentHashMap<>();
 
     private final String unitName = "flux manager";
     private final Logger logger = LoggerFactory.getLogger(unitName);

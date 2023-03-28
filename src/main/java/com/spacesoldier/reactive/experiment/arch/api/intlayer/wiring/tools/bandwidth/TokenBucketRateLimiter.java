@@ -26,10 +26,10 @@ public class TokenBucketRateLimiter {
     @Getter
     private int bucketCapacity = 450; // default value corresponds to 90% of connections Netty can initiate instantly
 
-    private Deque<String> tokenBucket = new ConcurrentLinkedDeque<>();
+    private final Deque<String> tokenBucket = new ConcurrentLinkedDeque<>();
 
-    private Set<String> spentCoins = Collections.synchronizedSet(new HashSet<>());
-    private Map<String, String> billsInProcess = new ConcurrentHashMap<>();
+    private final Set<String> spentCoins =  ConcurrentHashMap.newKeySet();
+    private final Map<String, String> billsInProcess = new ConcurrentHashMap<>();
 
     private BiConsumer<String,Object> requestSink;
 

@@ -9,6 +9,7 @@ import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -18,7 +19,7 @@ import java.util.function.Supplier;
 public class RoundRobinPriorityQueue implements RequestsQueue {
     private String queueNamePrefix = "roundRobin";
 
-    private final Map<Class, RequestsQueue> queuesToWrite = Collections.synchronizedMap(new HashMap<>());
+    private final Map<Class, RequestsQueue> queuesToWrite = new ConcurrentHashMap<>();
     private final Deque<RequestsQueue> queuesToRead = new ConcurrentLinkedDeque<>();
 
     private Function<String, RequestsQueue> requestQueueSource;
