@@ -52,7 +52,7 @@ public class BandwidthControllerConfig {
         TokenBucketRateLimiter rateLimiter =
                 TokenBucketRateLimiter.builder()
                                         .limiterName(bandwidthGateName)
-                                        .bucketCapacity(40)
+                                        .bucketCapacity(400)
                                         .requestSink(
                                             (rqId, payload) -> wiringAdapter.receiveSingleRequest(rqId,payload)
                                         )
