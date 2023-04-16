@@ -10,11 +10,13 @@ import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.tools.bandw
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.tools.queue.QueueManager;
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.tools.queue.QueueTactics;
 import com.spacesoldier.reactive.experiment.arch.api.intlayer.wiring.tools.queue.RequestsQueue;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.stereotype.Component;
 
 @Component
+@Slf4j
 public class BandwidthControllerConfig {
     private WiringAdapter wiringAdapter;
     private IntlayerObjectRouter intlayerObjectRouter;
@@ -98,15 +100,10 @@ public class BandwidthControllerConfig {
         wiringAdapter.registerFeature(
                 RouterBypassRequest.class,
                 requestObj -> {
-                    RouterBypassRequest request = null;
-                    try {
-                        request = (RouterBypassRequest) requestObj;
-                    } catch (Exception e){
-
-                    }
-
-                    if (request != null){
+                    if (requestObj instanceof RouterBypassRequest request){
                         rateLimiter.receiveBypassRequest().accept(request);
+                    } else {
+                       log.info("[RATE LIMITER]: error - provided object is not a RouterBypassRequest");
                     }
 
                     return "Ok";
